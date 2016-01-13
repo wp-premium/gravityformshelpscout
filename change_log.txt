@@ -1,0 +1,38 @@
+-----------------------------------------------------------
+1.3
+    - Added checkbox to add entry note form to post note to Help Scout conversation.
+	- Added feed duplication support.
+	- Added feed setting to create note for conversation.
+    - Added panel to entry view page with Help Scout conversation details.
+	- Added support for delaying feed processing until payment by PayPal Standard is successfully completed.
+	- Enabled single feed submission.
+    - Fixed an issue with the helpscout_conversation_id entry meta property so it's returned with the entry object.
+    - Fixed an issue with the feed settings page and the conditional logic setting.
+    - Fixed an issue where HTML entities would appear in conversation subject when using merge tags.
+    - Fixed an issue where Help Scout would not include the conversation in the mailbox folder counts.
+    - Fixed an issue where multi-file upload field attachments would not upload correctly.
+    - Updated "Help Scout Conversation Id" entry list column to link to Help Scout conversation.
+    - Updated feed processing to prevent multiple Help Scout conversations from being created.
+    - Updated to store the created conversation id in the entry meta using the key 'helpscout_conversation_id'.
+    - Updated the form field drop down for the Customer's Email Address to include hidden fields.
+
+-----------------------------------------------------------
+1.2
+    - Added support for auto replies when conversation is created
+    - Added the 'gform_helpscout_process_body_shortcodes' filter for enabling the processing of shortcodes placed in the message body. See https://www.gravityhelp.com/documentation/article/gform_helpscout_process_body_shortcodes/
+    - Fixed an issue with conversations being tagged as 'Untagged'.
+    - Updated several functions to use new Add-On Framework functionality.
+    - Updated feed processing to abort if value of mapped Email Address field is invalid or empty.
+
+-----------------------------------------------------------
+1.1
+    - Added gf_helpscout() for easily getting an Help Scout instance.
+    - Added additional logging statement to process_feed().
+	- Added Spanish (es_ES) translation.
+	- Fixed tags not being appropriately added to conversations.
+	- Fixed PHP warning when no file attachments were provided.
+	- Fixed Add-On not loading if Help Scout API class was already defined.
+  
+-----------------------------------------------------------
+1.0
+	- It's all new!
