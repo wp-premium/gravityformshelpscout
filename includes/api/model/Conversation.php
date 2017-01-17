@@ -1,6 +1,8 @@
 <?php
 namespace HelpScout\model;
 
+use HelpScout\CustomFieldFactory;
+
 class Conversation {
 	const STATUS_ACTIVE  = 'active';
 	const STATUS_PENDING = 'pending';
@@ -9,29 +11,33 @@ class Conversation {
 
 	const OWNER_ANYONE = 1;
 
-	private $id          = null;
-	private $type        = null;
-	private $folderId    = 0;
-	private $draft       = null;
-	private $number      = 0;
-	private $owner       = null;
-	private $mailbox     = null;
-	private $customer    = null;
-	private $threadCount = 0;
-	private $status      = null;
-	private $subject     = null;
-	private $preview     = null;
-	private $createdBy   = null;
-	private $createdByType = null;
-	private $createdAt   = null;
-	private $modifiedAt  = null;
-	private $closedAt    = null;
-	private $closedBy    = null;
-	private $source      = null;
-	private $ccList      = null;
-	private $bccList     = null;
-	private $tags        = null;
-	private $threads     = null;
+	private $id             = null;
+	private $type           = null;
+	private $folderId       = 0;
+	private $draft          = null;
+	private $number         = 0;
+	private $owner          = null;
+	private $mailbox        = null;
+	private $customer       = null;
+	private $threadCount    = 0;
+	private $status         = null;
+	private $subject        = null;
+	private $preview        = null;
+	private $createdBy      = null;
+	private $createdByType  = null;
+	private $createdAt      = null;
+	private $modifiedAt     = null;
+	private $userModifiedAt = null;
+	private $closedAt       = null;
+	private $closedBy       = null;
+	private $source         = null;
+	private $ccList         = null;
+	private $bccList        = null;
+	private $tags           = null;
+	private $threads        = null;
+	private $customFields   = null;
+
+	private $unassigned     = false;
 
 	public function __construct($data = null) {
 		$this->status = self::STATUS_ACTIVE;
@@ -65,6 +71,7 @@ class Conversation {
 
 			$this->createdAt   = isset($data->createdAt) ? $data->createdAt : null;
 			$this->modifiedAt  = isset($data->modifiedAt) ? $data->modifiedAt : null;
+			$this->userModifiedAt  = isset($data->userModifiedAt) ? $data->userModifiedAt : null;
 			$this->closedAt    = isset($data->closedAt) ? $data->closedAt : null;
 			$this->ccList      = isset($data->cc) ? $data->cc : null;
 			$this->bccList     = isset($data->bcc) ? $data->bcc : null;
@@ -95,6 +102,14 @@ class Conversation {
 					}
 				}
 			}
+
+			if (isset($data->customFields)) {
+				$this->customFields = array();
+
+				foreach ($data->customFields as $field) {
+					$this->customFields[] = CustomFieldFactory::fromConversation((array) $field);
+				}
+			}
 		}
 	}
 
@@ -108,6 +123,7 @@ class Conversation {
 		$vars['subject'] = $this->getSubject();
 		$vars['createdAt'] = $this->getCreatedAt();
 		$vars['modifiedAt'] = $this->getModifiedAt();
+		$vars['userModifiedAt'] = $this->getUserModifiedAt();
 		$vars['closedAt'] = $this->getClosedAt();
 		$vars['source'] = $this->getSource();
 		$vars['cc'] = $this->getCcList();
@@ -116,6 +132,10 @@ class Conversation {
 
 		if ($this->getOwner() != null) {
 			$vars['owner'] = $this->getOwner()->getObjectVars();
+		}
+
+		if (is_null($this->getOwner()) && $this->unassigned) {
+			$vars['owner'] = null;
 		}
 
 		if ($this->getCustomer() != null) {
@@ -145,6 +165,8 @@ class Conversation {
 		}
 		$this->addThreadsToVars($vars);
 
+		$this->addCustomFieldsToVars($vars);
+
 		return $vars;
 	}
 
@@ -159,6 +181,22 @@ class Conversation {
 			}
 		}
 		$vars['threads'] = $threads;
+	}
+
+	private function addCustomFieldsToVars(array &$vars) {
+		/* @var $field \HelpScout\model\ref\customfields\AbstractCustomFieldRef */
+		$fields = array();
+
+		if ($list = $this->getCustomFields()) {
+			foreach ($list as $field) {
+				$fields[] = array(
+					'fieldId' => $field->getId(),
+					'name' => $field->getName(),
+					'value' => $field->getValue()
+				);
+			}
+		}
+		$vars['customFields'] = $fields;
 	}
 
 	public function toJSON() {
@@ -258,10 +296,18 @@ class Conversation {
 	}
 
 	/**
-	 * @param $modifiedAt
+	 * @param $userModifiedAt
 	 */
-	public function setModifiedAt($modifiedAt) {
-		$this->modifiedAt = $modifiedAt;
+	public function setUserModifiedAt($userModifiedAt) {
+		$this->modifiedAt = $userModifiedAt;
+		$this->userModifiedAt = $userModifiedAt;
+	}
+
+	/**
+	 * @param $userModifiedAt
+	 */
+	public function setModifiedAt($userModifiedAt) {
+        $this->setUserModifiedAt($userModifiedAt);
 	}
 
 	/**
@@ -276,6 +322,12 @@ class Conversation {
 	 */
 	public function setOwner(\HelpScout\model\ref\PersonRef $owner) {
 		$this->owner = $owner;
+		$this->unassigned = false;
+	}
+
+	public function unassign() {
+		$this->unassigned = true;
+		$this->owner = null;
 	}
 
 	/**
@@ -464,8 +516,20 @@ class Conversation {
 	/**
 	 * @return string
 	 */
-	public function getModifiedAt() {
+	public function getUserModifiedAt() {
+        if (!is_null($this->userModifiedAt))
+        {
+            return $this->userModifiedAt;
+        }
+
 		return $this->modifiedAt;
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getModifiedAt() {
+		return $this->getUserModifiedAt();
 	}
 
 	/**
@@ -534,5 +598,21 @@ class Conversation {
 			}
 		}
 		return $this->threads;
+	}
+
+	/**
+	 * @return array|null
+	 */
+	public function getCustomFields()
+	{
+		return $this->customFields;
+	}
+
+	/**
+	 * @param array|null $customFields
+	 */
+	public function setCustomFields(array $customFields)
+	{
+		$this->customFields = $customFields;
 	}
 }
