@@ -1,4 +1,12 @@
 -----------------------------------------------------------
+1.4
+    - Added support for the Gravity Forms 2.0 entry detail page changes.
+	- Updated strings for translations.
+    - Updated API library to latest version.
+    - Fixed an issue with the conversation BCC emails not being set correctly.
+    - Fixed conversation not being created if first or last name was longer than forty characters.
+
+-----------------------------------------------------------
 1.3
     - Added checkbox to add entry note form to post note to Help Scout conversation.
 	- Added feed duplication support.
