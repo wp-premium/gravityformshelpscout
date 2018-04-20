@@ -1,5 +1,10 @@
 <?php
 
+// don't load directly
+if ( ! defined( 'ABSPATH' ) ) {
+	die();
+}
+
 GFForms::include_feed_addon_framework();
 
 /**
@@ -180,6 +185,9 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.0
 	 * @access public
+	 *
+	 * @uses GFAddOn::is_gravityforms_supported()
+	 * @uses GFFeedAddOn::add_delayed_payment_support()
 	 */
 	public function init() {
 
@@ -198,6 +206,9 @@ class GFHelpScout extends GFFeedAddOn {
 		add_action( 'gform_post_note_added', array( $this, 'add_note_to_conversation' ), 10, 6 );
 
 		add_filter( 'gform_entries_column_filter', array( $this, 'add_entry_conversation_column_link' ), 10, 5 );
+
+		add_filter( 'gform_entry_list_bulk_actions', array( $this, 'add_bulk_action' ), 10, 2 );
+		add_action( 'gform_entry_list_action_helpscout', array( $this, 'process_bulk_action' ), 10, 3 );
 
 		$this->add_delayed_payment_support(
 			array(
@@ -218,6 +229,8 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.0
 	 * @access public
+	 *
+	 * @uses GFHelpScout::plugin_settings_description()
 	 *
 	 * @return array
 	 */
@@ -253,22 +266,28 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
+	 * @uses GFHelpScout::initialize_api()
+	 *
 	 * @return string
 	 */
 	public function plugin_settings_description() {
 
-		$description = '<p>';
-		$description .= sprintf(
-			__( 'Help Scout makes it easy to provide your customers with a great support experience. Use Gravity Forms to collect customer information and automatically create a new Help Scout conversation. If you don\'t have a Help Scout account, you can %1$ssign up for one here.%2$s', 'gravityformshelpscout' ),
-			'<a href="http://www.helpscout.net/" target="_blank">', '</a>'
+		// Prepare description.
+		$description = sprintf(
+			'<p>%s</p>',
+			sprintf(
+				esc_html__( 'Help Scout makes it easy to provide your customers with a great support experience. Use Gravity Forms to collect customer information and automatically create a new Help Scout conversation. If you don\'t have a Help Scout account, you can %1$ssign up for one here.%2$s', 'gravityformshelpscout' ),
+				'<a href="http://www.helpscout.net/" target="_blank">', '</a>'
+			)
 		);
-		$description .= '</p>';
 
+		// Add API key location instructions.
 		if ( ! $this->initialize_api() ) {
 
-			$description .= '<p>';
-			$description .= __( 'Gravity Forms Help Scout Add-On requires your API Key. You can find your API Key by visiting the API Keys page under Your Profile.', 'gravityformshelpscout' );
-			$description .= '</p>';
+			$description .= sprintf(
+				'<p>%s</p>',
+				esc_html__( 'Gravity Forms Help Scout Add-On requires your API Key. You can find your API Key by visiting the API Keys page under Your Profile.', 'gravityformshelpscout' )
+			);
 
 		}
 
@@ -288,182 +307,253 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
+	 * @uses GFAddOn::add_field_after()
+	 * @uses GFAddOn::get_first_field_by_type()
+	 * @uses GFFeedAddOn::get_default_feed_name()
+	 * @uses GFHelpScout::file_fields_for_feed_setup()
+	 * @uses GFHelpScout::mailboxes_for_feed_setting()
+	 * @uses GFHelpScout::message_types_for_feed_setup()
+	 * @uses GFHelpScout::status_types_for_feed_setup()
+	 * @uses GFHelpScout::users_for_feed_settings()
+	 *
 	 * @return array
 	 */
 	public function feed_settings_fields() {
 
-		$general_settings = array(
-			'title'  => '',
-			'fields' => array(
-				array(
-					'name'          => 'feed_name',
-					'type'          => 'text',
-					'required'      => true,
-					'class'         => 'medium',
-					'label'         => __( 'Name', 'gravityformshelpscout' ),
-					'tooltip'       => '<h6>' . __( 'Name', 'gravityformshelpscout' ) . '</h6>' . __( 'Enter a feed name to uniquely identify this setup.', 'gravityformshelpscout' ),
-					'default_value' => $this->get_default_feed_name(),
-				),
-				array(
-					'name'     => 'mailbox',
-					'type'     => 'select',
-					'required' => true,
-					'choices'  => $this->mailboxes_for_feed_setting(),
-					'onchange' => "jQuery(this).parents('form').submit();",
-					'label'    => __( 'Destination Mailbox', 'gravityformshelpscout' ),
-					'tooltip'  => '<h6>' . __( 'Destination Mailbox', 'gravityformshelpscout' ) . '</h6>' . __( 'Select the Help Scout Mailbox this form entry will be sent to.', 'gravityformshelpscout' ),
-				),
-				array(
-					'name'       => 'user',
-					'type'       => 'select',
-					'dependency' => 'mailbox',
-					'choices'    => $this->users_for_feed_settings(),
-					'label'      => __( 'Assign To User', 'gravityformshelpscout' ),
-					'tooltip'    => '<h6>' . __( 'Assign To User', 'gravityformshelpscout' ) . '</h6>' . __( 'Choose the Help Scout User this form entry will be assigned to.', 'gravityformshelpscout' ),
-				),
-			),
-		);
-
-		$message_settings = array(
-			'title'      => __( 'Message Details', 'gravityformshelpscout' ),
-			'dependency' => 'mailbox',
-			'fields'     => array(
-				array(
-					'name'          => 'customer_email',
-					'type'          => 'field_select',
-					'required'      => true,
-					'label'         => __( 'Customer\'s Email Address', 'gravityformshelpscout' ),
-					'default_value' => $this->get_first_field_by_type( 'email' ),
-					'args'          => array( 'input_types' => array( 'email', 'hidden' ) ),
-				),
-				array(
-					'name'          => 'customer_first_name',
-					'type'          => 'field_select',
-					'label'         => __( 'Customer\'s First Name', 'gravityformshelpscout' ),
-					'default_value' => $this->get_first_field_by_type( 'name', 3 ),
-				),
-				array(
-					'name'          => 'customer_last_name',
-					'type'          => 'field_select',
-					'label'         => __( 'Customer\'s Last Name', 'gravityformshelpscout' ),
-					'default_value' => $this->get_first_field_by_type( 'name', 6 ),
-				),
-				array(
-					'name'          => 'tags',
-					'type'          => 'text',
-					'label'         => __( 'Tags', 'gravityformshelpscout' ),
-					'class'         => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
-				),
-				array(
-					'name'          => 'subject',
-					'type'          => 'text',
-					'required'      => true,
-					'class'         => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
-					'label'         => __( 'Subject', 'gravityformshelpscout' ),
-					'default_value' => 'New submission from {form_title}',
-				),
-				array(
-					'name'          => 'body',
-					'type'          => 'textarea',
-					'required'      => true,
-					'use_editor'    => true,
-					'class'         => 'large',
-					'label'         => __( 'Message Body', 'gravityformshelpscout' ),
-					'default_value' => '{all_fields}',
+		$settings = array(
+			array(
+				'fields' => array(
+					array(
+						'name'          => 'feed_name',
+						'type'          => 'text',
+						'required'      => true,
+						'class'         => 'medium',
+						'label'         => esc_html__( 'Name', 'gravityformshelpscout' ),
+						'default_value' => $this->get_default_feed_name(),
+						'tooltip'       => sprintf(
+							'<h6>%s</h6>%s',
+							esc_html__( 'Name', 'gravityformshelpscout' ),
+							esc_html__( 'Enter a feed name to uniquely identify this setup.', 'gravityformshelpscout' )
+						),
+					),
+					array(
+						'name'          => 'mailbox',
+						'type'          => 'select',
+						'required'      => true,
+						'choices'       => $this->mailboxes_for_feed_setting(),
+						'onchange'      => "jQuery(this).parents('form').submit();",
+						'label'         => esc_html__( 'Destination Mailbox', 'gravityformshelpscout' ),
+						'tooltip'       => sprintf(
+							'<h6>%s</h6>%s',
+							esc_html__( 'Destination Mailbox', 'gravityformshelpscout' ),
+							esc_html__( 'Select the Help Scout Mailbox this form entry will be sent to.', 'gravityformshelpscout' )
+						),
+					),
+					array(
+						'name'          => 'user',
+						'type'          => 'select',
+						'dependency'    => 'mailbox',
+						'choices'       => $this->users_for_feed_settings(),
+						'label'         => esc_html__( 'Assign To User', 'gravityformshelpscout' ),
+						'tooltip'       => sprintf(
+							'<h6>%s</h6>%s',
+							esc_html__( 'Assign To User', 'gravityformshelpscout' ),
+							esc_html__( 'Choose the Help Scout User this form entry will be assigned to.', 'gravityformshelpscout' )
+						),
+					),
 				),
 			),
-		);
-
-		$file_fields_for_feed = $this->file_fields_for_feed_setup();
-
-		if ( ! empty( $file_fields_for_feed ) ) {
-
-			$message_settings['fields'][] = array(
-				'name'    => 'attachments',
-				'type'    => 'checkbox',
-				'label'   => __( 'Attachments', 'gravityformshelpscout' ),
-				'choices' => $file_fields_for_feed,
-			);
-
-		}
-
-		if ( apply_filters( 'gform_helpscout_enable_cc', false ) ) {
-
-			$message_settings['fields'][] = array(
-				'name'     => 'cc',
-				'type'     => 'text',
-				'required' => true,
-				'class'    => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
-				'label'    => __( 'CC', 'gravityformshelpscout' ),
-			);
-
-		}
-
-		if ( apply_filters( 'gform_helpscout_enable_bcc', false ) ) {
-
-			$message_settings['fields'][] = array(
-				'name'     => 'bcc',
-				'type'     => 'text',
-				'required' => true,
-				'class'    => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
-				'label'    => __( 'BCC', 'gravityformshelpscout' ),
-			);
-
-		}
-
-		$option_settings = array(
-			'title'      => __( 'Message Options', 'gravityformshelpscout' ),
-			'dependency' => 'mailbox',
-			'fields'     => array(
-				array(
-					'name'          => 'status',
-					'type'          => 'select',
-					'choices'       => $this->status_types_for_feed_setup(),
-					'label'         => __( 'Message Status', 'gravityformshelpscout' ),
+			array(
+				'title'      => esc_html__( 'Customer Details', 'gravityformshelpscout' ),
+				'dependency' => 'mailbox',
+				'fields'     => array(
+					array(
+						'name'          => 'customer_email',
+						'type'          => 'field_select',
+						'required'      => true,
+						'label'         => esc_html__( 'Email Address', 'gravityformshelpscout' ),
+						'default_value' => $this->get_first_field_by_type( 'email' ),
+						'args'          => array( 'input_types' => array( 'email', 'hidden' ) ),
+					),
+					array(
+						'name'          => 'customer_first_name',
+						'type'          => 'field_select',
+						'label'         => esc_html__( 'First Name', 'gravityformshelpscout' ),
+						'default_value' => $this->get_first_field_by_type( 'name', 3 ),
+					),
+					array(
+						'name'          => 'customer_last_name',
+						'type'          => 'field_select',
+						'label'         => esc_html__( 'Last Name', 'gravityformshelpscout' ),
+						'default_value' => $this->get_first_field_by_type( 'name', 6 ),
+					),
+					array(
+						'name'          => 'customer_phone',
+						'type'          => 'field_select',
+						'required'      => false,
+						'label'         => esc_html__( 'Phone Number', 'gravityformshelpscout' ),
+						'default_value' => $this->get_first_field_by_type( 'phone' ),
+						'args'          => array( 'input_types' => array( 'phone', 'hidden' ) ),
+					),
 				),
-				array(
-					'name'          => 'type',
-					'type'          => 'select',
-					'choices'       => $this->message_types_for_feed_setup(),
-					'label'         => __( 'Message Type', 'gravityformshelpscout' ),
+			),
+			array(
+				'title'      => esc_html__( 'Message Details', 'gravityformshelpscout' ),
+				'dependency' => 'mailbox',
+				'fields'     => array(
+					array(
+						'name'          => 'tags',
+						'type'          => 'text',
+						'label'         => esc_html__( 'Tags', 'gravityformshelpscout' ),
+						'class'         => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
+					),
+					array(
+						'name'          => 'subject',
+						'type'          => 'text',
+						'required'      => true,
+						'class'         => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
+						'label'         => esc_html__( 'Subject', 'gravityformshelpscout' ),
+						'default_value' => 'New submission from {form_title}',
+					),
+					array(
+						'name'          => 'body',
+						'type'          => 'textarea',
+						'required'      => true,
+						'use_editor'    => true,
+						'class'         => 'large',
+						'label'         => esc_html__( 'Message Body', 'gravityformshelpscout' ),
+						'default_value' => '{all_fields}',
+					),
 				),
-				array(
-					'name'          => 'note',
-					'type'          => 'textarea',
-					'use_editor'    => true,
-					'class'         => 'medium',
-					'label'         => __( 'Note', 'gravityformshelpscout' ),
+			),
+			array(
+				'title'      => esc_html__( 'Message Options', 'gravityformshelpscout' ),
+				'dependency' => 'mailbox',
+				'fields'     => array(
+					array(
+						'name'          => 'status',
+						'type'          => 'select',
+						'choices'       => $this->status_types_for_feed_setup(),
+						'label'         => esc_html__( 'Message Status', 'gravityformshelpscout' ),
+					),
+					array(
+						'name'          => 'type',
+						'type'          => 'select',
+						'choices'       => $this->message_types_for_feed_setup(),
+						'label'         => esc_html__( 'Message Type', 'gravityformshelpscout' ),
+					),
+					array(
+						'name'          => 'note',
+						'type'          => 'textarea',
+						'use_editor'    => true,
+						'class'         => 'medium',
+						'label'         => esc_html__( 'Note', 'gravityformshelpscout' ),
+					),
+					array(
+						'name'          => 'auto_reply',
+						'type'          => 'checkbox',
+						'label'         => esc_html__( 'Auto Reply', 'gravityformshelpscout' ),
+						'choices'       => array(
+							array(
+								'name'  => 'auto_reply',
+								'label' => esc_html__( 'Send Help Scout auto reply when message is created', 'gravityformshelpscout' ),
+							),
+						),
+					),
 				),
-				array(
-					'name'          => 'auto_reply',
-					'type'          => 'checkbox',
-					'label'         => __( 'Auto Reply', 'gravityformshelpscout' ),
-					'choices'       => array(
-						array(
-							'name'  => 'auto_reply',
-							'label' => __( 'Send Help Scout auto reply when message is created', 'gravityformshelpscout' ),
+			),
+			array(
+				'title'      => esc_html__( 'Feed Conditional Logic', 'gravityformshelpscout' ),
+				'dependency' => 'mailbox',
+				'fields'     => array(
+					array(
+						'name'           => 'feed_ondition',
+						'type'           => 'feed_condition',
+						'label'          => esc_html__( 'Conditional Logic', 'gravityformshelpscout' ),
+						'checkbox_label' => esc_html__( 'Enable', 'gravityformshelpscout' ),
+						'instructions'   => esc_html__( 'Export to Help Scout if', 'gravityformshelpscout' ),
+						'tooltip'        => sprintf(
+							'<h6>%s</h6>%s',
+							esc_html__( 'Conditional Logic', 'gravityformshelpscout' ),
+							esc_html__( 'When conditional logic is enabled, form submissions will only be exported to Help Scout when the condition is met. When disabled, all form submissions will be posted.', 'gravityformshelpscout' )
 						),
 					),
 				),
 			),
 		);
 
-		$conditional_settings = array(
-			'title'      => __( 'Feed Conditional Logic', 'gravityformshelpscout' ),
-			'dependency' => 'mailbox',
-			'fields'     => array(
-				array(
-					'name'           => 'feed_ondition',
-					'type'           => 'feed_condition',
-					'label'          => __( 'Conditional Logic', 'gravityformshelpscout' ),
-					'checkbox_label' => __( 'Enable', 'gravityformshelpscout' ),
-					'instructions'   => __( 'Export to Help Scout if', 'gravityformshelpscout' ),
-					'tooltip'        => '<h6>' . __( 'Conditional Logic', 'gravityformshelpscout' ) . '</h6>' . __( 'When conditional logic is enabled, form submissions will only be exported to Help Scout when the condition is met. When disabled, all form submissions will be posted.', 'gravityformshelpscout' ),
-				),
-			),
-		);
+		// Get available file fields.
+		$file_fields = $this->file_fields_for_feed_setup();
 
-		return array( $general_settings, $message_settings, $option_settings, $conditional_settings );
+		// If file fields are available, add feed setting.
+		if ( ! empty( $file_fields ) ) {
+
+			// Prepare field.
+			$field = array(
+				'name'    => 'attachments',
+				'type'    => 'checkbox',
+				'label'   => esc_html__( 'Attachments', 'gravityformshelpscout' ),
+				'choices' => $file_fields,
+			);
+
+			// Add field.
+			$settings = $this->add_field_after( 'body', $field, $settings );
+
+		}
+
+		/**
+		 * Enable the display of the CC setting on the Help Scout feed.
+		 *
+		 * @since  1.0
+		 *
+		 * @param bool $enable_cc Display CC setting.
+		 */
+		$enable_cc = apply_filters( 'gform_helpscout_enable_cc', true );
+
+		// If CC field is enabled, add feed setting.
+		if ( $enable_cc ) {
+
+			// Prepare field.
+			$field = array(
+				'name'     => 'cc',
+				'type'     => 'text',
+				'required' => false,
+				'class'    => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
+				'label'    => esc_html__( 'CC', 'gravityformshelpscout' ),
+			);
+
+			// Add field.
+			$settings = $this->add_field_after( empty( $file_fields ) ? 'body' : 'attachments', $field, $settings );
+
+		}
+
+		/**
+		 * Enable the display of the BCC setting on the Help Scout feed.
+		 *
+		 * @since  1.0
+		 *
+		 * @param bool $enable_bcc Display BCC setting.
+		 */
+		$enable_bcc = apply_filters( 'gform_helpscout_enable_bcc', false );
+
+		// If BCC field is enabled, add feed setting.
+		if ( $enable_bcc ) {
+
+			// Prepare field.
+			$field = array(
+				'name'     => 'bcc',
+				'type'     => 'text',
+				'required' => false,
+				'class'    => 'medium merge-tag-support mt-position-right mt-hide_all_fields',
+				'label'    => esc_html__( 'BCC', 'gravityformshelpscout' ),
+			);
+
+			// Add field.
+			$settings = $this->add_field_after( $enable_cc ? 'cc' : ( empty( $file_fields ) ? 'body' : 'attachments' ), $field, $settings );
+
+		}
+
+		return $settings;
 
 	}
 
@@ -473,7 +563,10 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
-	 * @return array $choices
+	 * @uses GFAddOn::log_error()
+	 * @uses GFHelpScout::initialize_api()
+	 *
+	 * @return array
 	 */
 	public function mailboxes_for_feed_setting() {
 
@@ -504,19 +597,19 @@ class GFHelpScout extends GFFeedAddOn {
 
 		}
 
-		// If there are mailboxes, add them to the choices array.
-		if ( $mailboxes ) {
+		// If there are no mailboxes, return.
+		if ( ! $mailboxes ) {
+			return $choices;
+		}
 
-			// Loop through mailboxes.
-			foreach ( $mailboxes->items as $mailbox ) {
+		// Loop through mailboxes.
+		foreach ( $mailboxes->items as $mailbox ) {
 
-				// Add mailbox as choice.
-				$choices[] = array(
-					'label' => $mailbox->name,
-					'value' => $mailbox->id,
-				);
-
-			}
+			// Add mailbox as choice.
+			$choices[] = array(
+				'label' => $mailbox->name,
+				'value' => $mailbox->id,
+			);
 
 		}
 
@@ -530,7 +623,11 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
-	 * @return array $choices
+	 * @uses GFAddOn::get_setting()
+	 * @uses GFAddOn::log_error()
+	 * @uses GFHelpScout::initialize_api()
+	 *
+	 * @return array
 	 */
 	public function users_for_feed_settings() {
 
@@ -548,13 +645,7 @@ class GFHelpScout extends GFFeedAddOn {
 		}
 
 		// Get current mailbox value.
-		$feed    = $this->get_current_feed();
-		$mailbox = $feed ? $feed['meta']['mailbox'] : rgpost( '_gaddon_setting_mailbox' );
-
-		// If this is a post request, override mailbox value with posted value.
-		if ( ! empty( $_POST ) ) {
-			$mailbox = rgpost( '_gaddon_setting_mailbox' );
-		}
+		$mailbox = $this->get_setting( 'mailbox' );
 
 		// If no mailbox is set, return choices.
 		if ( rgblank( $mailbox ) ) {
@@ -575,19 +666,19 @@ class GFHelpScout extends GFFeedAddOn {
 
 		}
 
-		// If users were found, add them as choices.
-		if ( $users ) {
+		// If no users were found, return.
+		if ( ! $users ) {
+			return $choices;
+		}
 
-			// Loop through users.
-			foreach ( $users->items as $user ) {
+		// Loop through users.
+		foreach ( $users->items as $user ) {
 
-				// Add user as choice.
-				$choices[] = array(
-					'label' => $user->firstName . ' ' . $user->lastName,
-					'value' => $user->id,
-				);
-
-			}
+			// Add user as choice.
+			$choices[] = array(
+				'label' => $user->firstName . ' ' . $user->lastName,
+				'value' => $user->id,
+			);
 
 		}
 
@@ -601,25 +692,25 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
-	 * @return array $choices
+	 * @return array
 	 */
 	public function status_types_for_feed_setup() {
 
 		return array(
 			array(
-				'label' => __( 'Active', 'gravityformshelpscout' ),
+				'label' => esc_html__( 'Active', 'gravityformshelpscout' ),
 				'value' => 'active',
 			),
 			array(
-				'label' => __( 'Pending', 'gravityformshelpscout' ),
+				'label' => esc_html__( 'Pending', 'gravityformshelpscout' ),
 				'value' => 'pending',
 			),
 			array(
-				'label' => __( 'Closed', 'gravityformshelpscout' ),
+				'label' => esc_html__( 'Closed', 'gravityformshelpscout' ),
 				'value' => 'closed',
 			),
 			array(
-				'label' => __( 'Spam', 'gravityformshelpscout' ),
+				'label' => esc_html__( 'Spam', 'gravityformshelpscout' ),
 				'value' => 'spam',
 			),
 		);
@@ -632,21 +723,21 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
-	 * @return array $choices
+	 * @return array
 	 */
 	public function message_types_for_feed_setup() {
 
 		return array(
 			array(
-				'label' => __( 'Email', 'gravityformshelpscout' ),
+				'label' => esc_html__( 'Email', 'gravityformshelpscout' ),
 				'value' => 'email',
 			),
 			array(
-				'label' => __( 'Chat', 'gravityformshelpscout' ),
+				'label' => esc_html__( 'Chat', 'gravityformshelpscout' ),
 				'value' => 'chat',
 			),
 			array(
-				'label' => __( 'Phone', 'gravityformshelpscout' ),
+				'label' => esc_html__( 'Phone', 'gravityformshelpscout' ),
 				'value' => 'phone',
 			),
 		);
@@ -659,7 +750,10 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
-	 * @return array $choices
+	 * @uses GFAPI::get_form()
+	 * @uses GFCommon::get_fields_by_type()
+	 *
+	 * @return array
 	 */
 	public function file_fields_for_feed_setup() {
 
@@ -672,20 +766,20 @@ class GFHelpScout extends GFFeedAddOn {
 		// Get file fields for form.
 		$file_fields = GFCommon::get_fields_by_type( $form, array( 'fileupload' ) );
 
-		// If file fields were found, add them as choices.
-		if ( ! empty( $file_fields ) ) {
+		// If no file fields were found, return.
+		if ( empty( $file_fields ) ) {
+			return $choices;
+		}
 
-			// Loop through file fields.
-			foreach ( $file_fields as $field ) {
+		// Loop through file fields.
+		foreach ( $file_fields as $field ) {
 
-				// Add field as choice.
-				$choices[] = array(
-					'name'          => 'attachments[' . $field->id . ']',
-					'label'         => $field->label,
-					'default_value' => 0,
-				);
-
-			}
+			// Add field as choice.
+			$choices[] = array(
+				'name'          => 'attachments[' . $field->id . ']',
+				'label'         => $field->label,
+				'default_value' => 0,
+			);
 
 		}
 
@@ -705,6 +799,8 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.0
 	 * @access public
 	 *
+	 * @uses GFHelpScout::initialize_api()
+	 *
 	 * @return bool
 	 */
 	public function can_create_feed() {
@@ -718,7 +814,8 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3
 	 * @access public
-	 * @param  int $feed_id Feed to be duplicated.
+	 *
+	 * @param int $feed_id Feed to be duplicated.
 	 *
 	 * @return bool
 	 */
@@ -739,9 +836,9 @@ class GFHelpScout extends GFFeedAddOn {
 	public function feed_list_columns() {
 
 		return array(
-			'feed_name' => __( 'Name', 'gravityformshelpscout' ),
-			'mailbox'   => __( 'Mailbox', 'gravityformshelpscout' ),
-			'user'      => __( 'User', 'gravityformshelpscout' ),
+			'feed_name' => esc_html__( 'Name', 'gravityformshelpscout' ),
+			'mailbox'   => esc_html__( 'Mailbox', 'gravityformshelpscout' ),
+			'user'      => esc_html__( 'User', 'gravityformshelpscout' ),
 		);
 
 	}
@@ -751,7 +848,11 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.0
 	 * @access public
-	 * @param  array $feed The feed being included in the feed list.
+	 *
+	 * @param array $feed The current Feed object.
+	 *
+	 * @uses GFAddOn::log_error()
+	 * @uses GFHelpScout::initialize_api()
 	 *
 	 * @return string
 	 */
@@ -759,22 +860,22 @@ class GFHelpScout extends GFFeedAddOn {
 
 		// If Help Scout instance is not initialized, return mailbox ID.
 		if ( ! $this->initialize_api() ) {
-			return $feed['meta']['mailbox'];
+			return rgars( $feed, 'meta/mailbox' );
 		}
 
 		try {
 
 			// Get feed mailbox.
-			$mailbox = $this->api->getMailbox( $feed['meta']['mailbox'] );
+			$mailbox = $this->api->getMailbox( rgars( $feed, 'meta/mailbox' ) );
 
-			return $mailbox->getName();
+			return esc_html( $mailbox->getName() );
 
 		} catch ( Exception $e ) {
 
 			// Log that mailbox could not be retrieved.
 			$this->log_error( __METHOD__ . '(): Unable to get mailbox for feed; ' . $e->getMessage() );
 
-			return $feed['meta']['mailbox'];
+			return rgars( $feed, 'meta/mailbox' );
 
 		}
 
@@ -785,7 +886,11 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.0
 	 * @access public
-	 * @param  array $feed The feed being included in the feed list.
+	 *
+	 * @param array $feed The current Feed object.
+	 *
+	 * @uses GFAddOn::log_error()
+	 * @uses GFHelpScout::initialize_api()
 	 *
 	 * @return string
 	 */
@@ -798,22 +903,22 @@ class GFHelpScout extends GFFeedAddOn {
 
 		// If Help Scout instance is not initialized, return user ID.
 		if ( ! $this->initialize_api() ) {
-			return $feed['meta']['user'];
+			return rgars( $feed, 'meta/user' );
 		}
 
 		try {
 
 			// Get user for feed.
-			$user = $this->api->getUser( $feed['meta']['user'] );
+			$user = $this->api->getUser( rgars( $feed, 'meta/user' ) );
 
-			return $user->getFirstName() . ' ' . $user->getLastName();
+			return esc_html( $user->getFirstName() . ' ' . $user->getLastName() );
 
 		} catch ( Exception $e ) {
 
 			// Log that user could not be retrieved.
 			$this->log_error( __METHOD__ . '(): Unable to get user for feed; ' . $e->getMessage() );
 
-			return $feed['meta']['user'];
+			return rgars( $feed, 'meta/user' );
 
 		}
 
@@ -823,16 +928,25 @@ class GFHelpScout extends GFFeedAddOn {
 
 
 
-	// # FEED LIST -----------------------------------------------------------------------------------------------------
+	// # FEED PROCESSING -----------------------------------------------------------------------------------------------
 
 	/**
 	 * Process feed, create conversation.
 	 *
 	 * @since  1.0
 	 * @access public
-	 * @param  array $feed The feed object to be processed.
-	 * @param  array $entry The entry object currently being processed.
-	 * @param  array $form The form object currently being processed.
+	 *
+	 * @param array $feed  The current Feed object.
+	 * @param array $entry The current Entry object.
+	 * @param array $form  The current Form object.
+	 *
+	 * @uses GFAddOn::get_field_value()
+	 * @uses GFAddOn::is_json()
+	 * @uses GFAddOn::log_debug()
+	 * @uses GFCommon::is_invalid_or_empty_email()
+	 * @uses GFCommon::replace_variables()
+	 * @uses GFFeedAddOn::add_feed_error()
+	 * @uses GFHelpScout::initialize_api()
 	 */
 	public function process_feed( $feed, $entry, $form ) {
 
@@ -853,6 +967,7 @@ class GFHelpScout extends GFFeedAddOn {
 			'email'       => $this->get_field_value( $form, $entry, $feed['meta']['customer_email'] ),
 			'first_name'  => $this->get_field_value( $form, $entry, $feed['meta']['customer_first_name'] ),
 			'last_name'   => $this->get_field_value( $form, $entry, $feed['meta']['customer_last_name'] ),
+			'phone'       => $this->get_field_value( $form, $entry, $feed['meta']['customer_phone'] ),
 			'subject'     => GFCommon::replace_variables( $feed['meta']['subject'], $form, $entry, false, false, false, 'text' ),
 			'body'        => GFCommon::replace_variables( $feed['meta']['body'], $form, $entry ),
 			'attachments' => array(),
@@ -889,6 +1004,7 @@ class GFHelpScout extends GFFeedAddOn {
 		$customer = $this->api->getCustomerRefProxy( null, $data['email'] );
 		$customer->setFirstName( $data['first_name'] );
 		$customer->setLastName( $data['last_name'] );
+		$customer->setPhone( $data['phone'] );
 
 		// Initialize conversation object.
 		$conversation = new \HelpScout\model\Conversation();
@@ -952,7 +1068,7 @@ class GFHelpScout extends GFFeedAddOn {
 			if ( ! empty( $attachment_files ) ) {
 
 				// Prepare attachment file objects.
-				$attachments = $this->process_feed_attachments( $attachment_files );
+				$attachments = $this->process_feed_attachments( $attachment_files, $feed, $entry, $form );
 
 				// Add attachments to conversation thread.
 				$thread->setAttachments( $attachments );
@@ -963,7 +1079,7 @@ class GFHelpScout extends GFFeedAddOn {
 
 		// Prepare conversation tags.
 		$tags = ! empty( $data['tags'] ) ? array_map( 'trim', explode( ',', $data['tags'] ) ) : array();
-		$tags = gf_apply_filters( 'gform_helpscout_tags', $form['id'], $tags, $feed, $entry, $form );
+		$tags = gf_apply_filters( array( 'gform_helpscout_tags', $form['id'] ), $tags, $feed, $entry, $form );
 
 		// If tags are set, add them to conversation.
 		if ( ! empty( $tags ) ) {
@@ -971,11 +1087,12 @@ class GFHelpScout extends GFFeedAddOn {
 		}
 
 		// If defined, add CC email addresses.
-		if ( isset( $feed['meta']['cc'] ) ) {
+		if ( rgars( $feed, 'meta/cc' ) ) {
 
 			// Get CC email addresses.
 			$data['cc'] = GFCommon::replace_variables( $feed['meta']['cc'], $form, $entry );
 			$data['cc'] = ( is_array( $data['cc'] ) ) ? $data['cc'] : explode( ',', $data['cc'] );
+			$data['cc'] = array_filter( $data['cc'] );
 
 			// If CC email addresses are set, add them to conversation thread.
 			if ( ! empty( $data['cc'] ) ) {
@@ -985,11 +1102,12 @@ class GFHelpScout extends GFFeedAddOn {
 		}
 
 		// If defined, add BCC email addresses.
-		if ( isset( $feed['meta']['bcc'] ) ) {
+		if ( rgars( $feed, 'meta/bcc' ) ) {
 
 			// Get BCC email addresses.
 			$data['bcc'] = GFCommon::replace_variables( $feed['meta']['bcc'], $form, $entry );
 			$data['bcc'] = ( is_array( $data['bcc'] ) ) ? $data['bcc'] : explode( ',', $data['bcc'] );
+			$data['bcc'] = array_filter( $data['bcc'] );
 
 			// If BCC email addresses are set, add them to conversation thread.
 			if ( ! empty( $data['bcc'] ) ) {
@@ -1036,6 +1154,14 @@ class GFHelpScout extends GFFeedAddOn {
 			// Prepare note contents.
 			$note_text = GFCommon::replace_variables( $feed['meta']['note'], $form, $entry );
 
+			if ( gf_apply_filters( 'gform_helpscout_process_note_shortcodes', $form['id'], false, $form, $feed ) ) {
+				$note_text = do_shortcode( $note_text );
+			}
+
+			if ( empty( $note_text ) ) {
+				return;
+			}
+
 			// Get API user.
 			$api_user = $this->api->getUserMe();
 
@@ -1071,11 +1197,18 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.0
 	 * @access public
-	 * @param  array $files File paths to convert to Help Scout attachments.
 	 *
-	 * @return array $attachments
+	 * @param array $files File paths to convert to Help Scout attachments.
+	 * @param array $feed  The current Feed object.
+	 * @param array $entry The current Entry object.
+	 * @param array $form  The current Form object.
+	 *
+	 * @uses GFFeedAddOn::add_feed_error()
+	 * @uses GFHelpScout::initialize_api()
+	 *
+	 * @return array
 	 */
-	public function process_feed_attachments( $files ) {
+	public function process_feed_attachments( $files, $feed, $entry, $form ) {
 
 		// Initialize attachments array.
 		$attachments = array();
@@ -1131,13 +1264,86 @@ class GFHelpScout extends GFFeedAddOn {
 	// # ENTRY DETAILS -------------------------------------------------------------------------------------------------
 
 	/**
+	 * Add Create Conversation to entry list bulk actions.
+	 *
+	 * @since  1.4.2
+	 * @access public
+	 *
+	 * @param array $actions Bulk actions.
+	 * @param int   $form_id The current form ID.
+	 *
+	 * @return array
+	 */
+	public function add_bulk_action( $actions = array(), $form_id = '' ) {
+
+		// Add action.
+		$actions['helpscout'] = esc_html__( 'Create Help Scout Conversation', 'gravityformshelpscout' );
+
+		return $actions;
+
+	}
+
+	/**
+	 * Process Help Scout entry list bulk actions.
+	 *
+	 * @since  1.4.2
+	 * @access public
+	 *
+	 * @param string $action  Action being performed.
+	 * @param array  $entries The entry IDs the action is being applied to.
+	 * @param int    $form_id The current form ID.
+	 *
+	 * @uses GFAPI::get_entry()
+	 * @uses GFAPI::get_form()
+	 * @uses GFFeedAddOn::maybe_process_feed()
+	 * @uses GFHelpScout::get_entry_conversation_id()
+	 */
+	public function process_bulk_action( $action = '', $entries = array(), $form_id = '' ) {
+
+		// If no entries are being processed, return.
+		if ( empty( $entries ) ) {
+			return;
+		}
+
+		// Get the current form.
+		$form = GFAPI::get_form( $form_id );
+
+		// Loop through entries.
+		foreach ( $entries as $entry_id ) {
+
+			// Get the entry.
+			$entry = GFAPI::get_entry( $entry_id );
+
+			// If a Help Scout conversation ID exists for this entry, skip.
+			if ( $this->get_entry_conversation_id( $entry ) ) {
+				continue;
+			}
+
+			// Process feeds.
+			$this->maybe_process_feed( $entry, $form );
+
+		}
+
+	}
+
+
+
+
+
+	// # ENTRY DETAILS -------------------------------------------------------------------------------------------------
+
+	/**
 	 * Add the Help Scout details meta box to the entry detail page.
 	 *
 	 * @since  1.3.1
 	 * @access public
-	 * @param  array $meta_boxes The properties for the meta boxes.
-	 * @param  array $entry The entry currently being viewed/edited.
-	 * @param  array $form The form object used to process the current entry.
+	 *
+	 * @param array $meta_boxes The properties for the meta boxes.
+	 * @param array $entry      The entry currently being viewed/edited.
+	 * @param array $form       The form object used to process the current entry.
+	 *
+	 * @uses GFFeedAddOn::get_active_feeds()
+	 * @uses GFHelpScout::initialize_api()
 	 *
 	 * @return array
 	 */
@@ -1160,7 +1366,10 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3.1
 	 * @access public
-	 * @param  array $args An array containing the form and entry objects.
+	 *
+	 * @param array $args An array containing the form and entry objects.
+	 *
+	 * @uses GFHelpScout::get_panel_markup()
 	 */
 	public function add_details_meta_box( $args ) {
 
@@ -1173,8 +1382,13 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3.1
 	 * @access public
-	 * @param  array $form The current form.
-	 * @param  array $entry The current entry.
+	 *
+	 * @param array $form  The current Form object.
+	 * @param array $entry The current Entry object.
+	 *
+	 * @uses GFAddOn::log_error()
+	 * @uses GFCommon::format_date()
+	 * @uses GFHelpScout::get_entry_conversation_id()
 	 *
 	 * @return string
 	 */
@@ -1207,8 +1421,8 @@ class GFHelpScout extends GFFeedAddOn {
 
 			$html .= esc_html__( 'Conversation ID', 'gravityformshelpscout' ) . ': <a href="https://secure.helpscout.net/conversation/' . $conversation->getId() . '/' . $conversation->getNumber() . '/" target="_blank">' . $conversation->getId() . '</a><br /><br />';
 			$html .= esc_html__( 'Status', 'gravityformshelpscout' ) . ': ' . ucwords( $conversation->getStatus() ) . '<br /><br />';
-			$html .= esc_html__( 'Created At', 'gravityformshelpscout' ) . ': ' . GFCommon::format_Date( $conversation->getCreatedAt(), false, 'Y/m/d', true ) . '<br /><br />';
-			$html .= esc_html__( 'Last Updated At', 'gravityformshelpscout' ) . ': ' . GFCommon::format_Date( $conversation->getModifiedAt(), false, 'Y/m/d', true ) . '<br /><br />';
+			$html .= esc_html__( 'Created At', 'gravityformshelpscout' ) . ': ' . GFCommon::format_date( $conversation->getCreatedAt(), false, 'Y/m/d', true ) . '<br /><br />';
+			$html .= esc_html__( 'Last Updated At', 'gravityformshelpscout' ) . ': ' . GFCommon::format_date( $conversation->getModifiedAt(), false, 'Y/m/d', true ) . '<br /><br />';
 
 		} else {
 
@@ -1229,8 +1443,15 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3
 	 * @access public
-	 * @param  array $form The form object currently being viewed.
-	 * @param  array $entry The entry object currently being viewed.
+	 *
+	 * @param array $form  The current Form object.
+	 * @param array $entry The current Entry object.
+	 *
+	 * @uses GFFeedAddOn::get_active_feeds()
+	 * @uses GFHelpScout::get_panel_markup()
+	 * @uses GFHelpScout::initialize_api()
+	 *
+	 * @return string
 	 */
 	public function add_entry_detail_panel( $form, $entry ) {
 
@@ -1255,6 +1476,11 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3
 	 * @access public
+	 *
+	 * @uses GFAddOn::get_current_entry()
+	 * @uses GFAPI::get_form()
+	 * @uses GFFeedAddOn::maybe_process_feed()
+	 * @uses GFHelpScout::get_entry_conversation_id()
 	 */
 	public function maybe_create_conversation() {
 
@@ -1282,7 +1508,12 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3
 	 * @access public
-	 * @param  string $note_button Add note button.
+	 *
+	 * @param string $note_button Add note button.
+	 *
+	 * @uses GFAddOn::get_current_entry()
+	 * @uses GFHelpScout::get_entry_conversation_id()
+	 * @uses GFHelpScout::initialize_api()
 	 *
 	 * @return string $note_button
 	 */
@@ -1310,12 +1541,19 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3
 	 * @access public
-	 * @param  int    $note_id - The ID of the created note.
-	 * @param  int    $entry_id - The ID of the entry the note belongs to.
-	 * @param  int    $user_id - The ID of the user who created the note.
-	 * @param  string $user_name - The name of the user who created the note.
-	 * @param  string $note - The note contents.
-	 * @param  string $note_type - The note type.
+	 *
+	 * @param int    $note_id   The ID of the created note.
+	 * @param int    $entry_id  The ID of the entry the note belongs to.
+	 * @param int    $user_id   The ID of the user who created the note.
+	 * @param string $user_name The name of the user who created the note.
+	 * @param string $note      The note contents.
+	 * @param string $note_type The note type.
+	 *
+	 * @uses GFAddOn::log_debug()
+	 * @uses GFAddOn::log_error()
+	 * @uses GFAPI::get_entry()
+	 * @uses GFHelpScout::get_entry_conversation_id()
+	 * @uses GFHelpScout::initialize_api()
 	 */
 	public function add_note_to_conversation( $note_id, $entry_id, $user_id, $user_name, $note, $note_type ) {
 
@@ -1365,13 +1603,17 @@ class GFHelpScout extends GFFeedAddOn {
 
 
 
-	// # HELPER FUNCTIONS ----------------------------------------------------------------------------------------------
+	// # HELPER METHODS ------------------------------------------------------------------------------------------------
 
 	/**
 	 * Initializes Help Scout API if API credentials are valid.
 	 *
 	 * @since  1.0
 	 * @access public
+	 *
+	 * @uses GFAddOn::get_plugin_setting()
+	 * @uses GFAddOn::log_debug()
+	 * @uses GFAddOn::log_error()
 	 *
 	 * @return bool|null
 	 */
@@ -1382,14 +1624,14 @@ class GFHelpScout extends GFFeedAddOn {
 			return true;
 		}
 
-		// Load API library requirements.
+		// Load the API library.
 		if ( ! class_exists( 'Curl' ) ) {
 			require_once 'includes/curl/curl.php';
 		}
 
 		// Load the API library.
 		if ( ! class_exists( 'HelpScout\ApiClient' ) ) {
-			require_once 'includes/api/ApiClient.php';
+			require_once 'includes/api/src/HelpScout/ApiClient.php';
 		}
 
 		// Get the API Key.
@@ -1459,6 +1701,12 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @since  1.3.1
 	 * @access public
 	 *
+	 * @uses GFAddOn::is_gravityforms_supported()
+	 * @uses GFAPI::get_entries()
+	 * @uses GFAPI::get_entry()
+	 * @uses GFCommon::get_base_path()
+	 * @uses GFEntryDetail::get_current_entry()
+	 *
 	 * @return array $entry
 	 */
 	public function get_current_entry() {
@@ -1498,11 +1746,16 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.0
 	 * @access public
-	 * @param  string $value Current value that will be displayed in this cell.
-	 * @param  int    $form_id ID of the current form.
-	 * @param  int    $field_id ID of the field that this column applies to.
-	 * @param  array  $entry Current entry object.
-	 * @param  string $query_string Current page query string with search and pagination state.
+	 *
+	 * @param string $value Current value that will be displayed in this cell.
+	 * @param int    $form_id ID of the current form.
+	 * @param int    $field_id ID of the field that this column applies to.
+	 * @param array  $entry Current entry object.
+	 * @param string $query_string Current page query string with search and pagination state.
+	 *
+	 * @uses GFAddOn::log_error()
+	 * @uses GFHelpScout::get_entry_conversation_id()
+	 * @uses GFHelpScout::initialize_api()
 	 *
 	 * @return string
 	 */
@@ -1544,7 +1797,8 @@ class GFHelpScout extends GFFeedAddOn {
 	 *
 	 * @since  1.3.1
 	 * @access public
-	 * @param  array $entry The entry currently being viewed/edited.
+	 *
+	 * @param array $entry The entry currently being viewed/edited.
 	 *
 	 * @return string
 	 */
