@@ -1,0 +1,48 @@
+#tab_gravityformshelpscout table.gforms_form_settings > tbody > tr > th {
+	padding: 0;
+	width: 0;
+}
+
+#gaddon-setting-row-auth p {
+	margin-bottom: 1em;
+}
+
+.gforms_form_settings > tbody > tr:last-child {
+	display: none;
+}
+
+#gform_helpscout_custom_app_auth_button,
+#gform_helpscout_auth_button {
+	display: inline-block;
+}
+
+.gform_helpscout_disclaimer {
+	margin-top: 2rem !important;
+	color: rgba( 0, 0, 0, 0.5 );
+}
+
+#gform_helpscout_enable_custom_app,
+#gform_helpscout_disable_custom_app {
+	border: 0;
+	background: transparent;
+	text-decoration: underline;
+	cursor: pointer;
+	color: rgba( 0, 0, 0, 0.5 );
+}
+
+#gform_helpscout_enable_custom_app:hover,
+#gform_helpscout_disable_custom_app:hover {
+	color: rgba( 0, 0, 0, 1.0 );
+}
+
+button[name="gform_save_custom_app_keys"] {
+	margin-top: 1rem !important;
+}
+
+.gf-helpscout-custom-app {
+	margin-bottom: 2rem;
+}
+
+#authButton.disabled {
+	pointer-events: none;
+}

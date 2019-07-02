@@ -1,287 +1,298 @@
-# Copyright 2009-2018 Rocketgenius, Inc.
+# Copyright (C) 2019 rocketgenius
+# This file is distributed under the same license as the Gravity Forms Help Scout Add-On plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: Gravity Forms Help Scout Add-On 1.5\n"
-"Report-Msgid-Bugs-To: http://www.gravtiyhelp.com\n"
-"POT-Creation-Date: 2018-04-12 16:06:22+00:00\n"
+"Project-Id-Version: Gravity Forms Help Scout Add-On 1.7\n"
+"Report-Msgid-Bugs-To: https://gravityforms.com/support\n"
+"Last-Translator: Gravity Forms <support@gravityforms.com>\n"
+"Language-Team: Gravity Forms <support@gravityforms.com>\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=utf-8\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"PO-Revision-Date: 2018-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Rocketgenius <customerservice@rocketgenius.com>\n"
-"Language-Team: Rocketgenius <customerservice@rocketgenius.com>\n"
-"X-Generator: Gravity Forms Build Server\n"
-"X-Poedit-KeywordsList: "
-"__;_e;_x:1,2c;_ex:1,2c;_n:1,2;_nx:1,2,4c;_n_noop:1,2;_nx_noop:1,2,3c;esc_"
-"attr__;esc_html__;esc_attr_e;esc_html_e;esc_attr_x:1,2c;esc_html_x:1,2c;\n"
-"Project-Id-Version: gravityformshelpscout\n"
-"Language: en_US\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Poedit-Basepath: ../\n"
-"X-Poedit-Bookmarks: \n"
-"X-Poedit-Country: United States\n"
-"X-Poedit-SearchPath-0: .\n"
-"X-Poedit-SourceCharset: utf-8\n"
-"X-Textdomain-Support: yes\n"
+"POT-Creation-Date: 2019-06-11T22:31:06+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.2.0\n"
+"X-Domain: gravityformshelpscout\n"
+
+#. Plugin Name of the plugin
+msgid "Gravity Forms Help Scout Add-On"
+msgstr ""
+
+#. Plugin URI of the plugin
+msgid "https://www.gravityforms.com"
+msgstr ""
+
+#. Description of the plugin
+msgid "Integrates Gravity Forms with Help Scout, enabling end users to create new Help Scout conversations."
+msgstr ""
+
+#. Author of the plugin
+msgid "rocketgenius"
+msgstr ""
+
+#. Author URI of the plugin
+msgid "https://www.rocketgenius.com"
+msgstr ""
 
 #: class-gf-helpscout.php:215
 msgid "Create conversation in Help Scout only when payment is received."
 msgstr ""
 
-#: class-gf-helpscout.php:246
-msgid "API Key"
+#: class-gf-helpscout.php:292
+msgid "Unable to authenticate with Help Scout."
 msgstr ""
 
-#: class-gf-helpscout.php:254
-msgid "Help Scout settings have been updated."
+#: class-gf-helpscout.php:397
+msgid "Help Scout makes it easy to provide your customers with a great support experience. Use Gravity Forms to collect customer information and automatically create a new Help Scout conversation. If you don't have a Help Scout account, you can %1$ssign up for one here.%2$s"
 msgstr ""
 
-#: class-gf-helpscout.php:279
-msgid ""
-"Help Scout makes it easy to provide your customers with a great support "
-"experience. Use Gravity Forms to collect customer information and "
-"automatically create a new Help Scout conversation. If you don't have a "
-"Help Scout account, you can %1$ssign up for one here.%2$s"
+#: class-gf-helpscout.php:428
+msgid "Authenticated with Help Scout."
 msgstr ""
 
-#: class-gf-helpscout.php:289
-msgid ""
-"Gravity Forms Help Scout Add-On requires your API Key. You can find your "
-"API Key by visiting the API Keys page under Your Profile."
+#: class-gf-helpscout.php:431
+msgid "De-Authorize Help Scout"
 msgstr ""
 
-#: class-gf-helpscout.php:331 class-gf-helpscout.php:335
-#: class-gf-helpscout.php:839
-msgid "Name"
-msgstr ""
-
-#: class-gf-helpscout.php:336
-msgid "Enter a feed name to uniquely identify this setup."
-msgstr ""
-
-#: class-gf-helpscout.php:345 class-gf-helpscout.php:348
-msgid "Destination Mailbox"
-msgstr ""
-
-#: class-gf-helpscout.php:349
-msgid "Select the Help Scout Mailbox this form entry will be sent to."
-msgstr ""
-
-#: class-gf-helpscout.php:357 class-gf-helpscout.php:360
-msgid "Assign To User"
-msgstr ""
-
-#: class-gf-helpscout.php:361
-msgid "Choose the Help Scout User this form entry will be assigned to."
-msgstr ""
-
-#: class-gf-helpscout.php:367
-msgid "Customer Details"
-msgstr ""
-
-#: class-gf-helpscout.php:374
-msgid "Email Address"
-msgstr ""
-
-#: class-gf-helpscout.php:381
-msgid "First Name"
-msgstr ""
-
-#: class-gf-helpscout.php:387
-msgid "Last Name"
-msgstr ""
-
-#: class-gf-helpscout.php:394
-msgid "Phone Number"
-msgstr ""
-
-#: class-gf-helpscout.php:401
-msgid "Message Details"
-msgstr ""
-
-#: class-gf-helpscout.php:407
-msgid "Tags"
-msgstr ""
-
-#: class-gf-helpscout.php:415
-msgid "Subject"
-msgstr ""
-
-#: class-gf-helpscout.php:424
-msgid "Message Body"
-msgstr ""
-
-#: class-gf-helpscout.php:430
-msgid "Message Options"
-msgstr ""
-
-#: class-gf-helpscout.php:437
-msgid "Message Status"
-msgstr ""
-
-#: class-gf-helpscout.php:443
-msgid "Message Type"
-msgstr ""
-
-#: class-gf-helpscout.php:450
-msgid "Note"
+#: class-gf-helpscout.php:447
+msgid "To use a custom HelpScout app, you must have an SSL certificate installed and enabled. Visit this page after configuring your SSL certificate to use a custom Dropbox app."
 msgstr ""
 
 #: class-gf-helpscout.php:455
-msgid "Auto Reply"
+msgid "I don't want to use a custom HelpScout app."
 msgstr ""
 
-#: class-gf-helpscout.php:459
-msgid "Send Help Scout auto reply when message is created"
-msgstr ""
-
-#: class-gf-helpscout.php:466
-msgid "Feed Conditional Logic"
-msgstr ""
-
-#: class-gf-helpscout.php:472 class-gf-helpscout.php:477
-msgid "Conditional Logic"
-msgstr ""
-
-#: class-gf-helpscout.php:473
-msgid "Enable"
+#: class-gf-helpscout.php:467
+#: class-gf-helpscout.php:563
+msgid "Click here to authenticate with Help Scout."
 msgstr ""
 
 #: class-gf-helpscout.php:474
-msgid "Export to Help Scout if"
+msgid "I want to use a custom HelpScout app."
 msgstr ""
 
-#: class-gf-helpscout.php:478
-msgid ""
-"When conditional logic is enabled, form submissions will only be exported "
-"to Help Scout when the condition is met. When disabled, all form "
-"submissions will be posted."
+#: class-gf-helpscout.php:517
+msgid "OAuth Redirect URI"
 msgstr ""
 
-#: class-gf-helpscout.php:495
-msgid "Attachments"
+#: class-gf-helpscout.php:530
+msgid "App Key"
 msgstr ""
 
-#: class-gf-helpscout.php:522
-msgid "CC"
+#: class-gf-helpscout.php:542
+msgid "App Secret"
 msgstr ""
 
-#: class-gf-helpscout.php:548
-msgid "BCC"
+#: class-gf-helpscout.php:652
+#: class-gf-helpscout.php:656
+#: class-gf-helpscout.php:1133
+msgid "Name"
 msgstr ""
 
-#: class-gf-helpscout.php:576
-msgid "Choose A Mailbox"
+#: class-gf-helpscout.php:657
+msgid "Enter a feed name to uniquely identify this setup."
 msgstr ""
 
-#: class-gf-helpscout.php:637
-msgid "Do Not Assign"
+#: class-gf-helpscout.php:666
+#: class-gf-helpscout.php:669
+msgid "Destination Mailbox"
 msgstr ""
 
-#: class-gf-helpscout.php:701
-msgid "Active"
+#: class-gf-helpscout.php:670
+msgid "Select the Help Scout Mailbox this form entry will be sent to."
 msgstr ""
 
-#: class-gf-helpscout.php:705
-msgid "Pending"
+#: class-gf-helpscout.php:678
+#: class-gf-helpscout.php:681
+msgid "Assign To User"
 msgstr ""
 
-#: class-gf-helpscout.php:709
-msgid "Closed"
+#: class-gf-helpscout.php:682
+msgid "Choose the Help Scout User this form entry will be assigned to."
 msgstr ""
 
-#: class-gf-helpscout.php:713
-msgid "Spam"
+#: class-gf-helpscout.php:688
+msgid "Customer Details"
 msgstr ""
 
-#: class-gf-helpscout.php:732
-msgid "Email"
+#: class-gf-helpscout.php:695
+msgid "Email Address"
+msgstr ""
+
+#: class-gf-helpscout.php:702
+msgid "First Name"
+msgstr ""
+
+#: class-gf-helpscout.php:708
+msgid "Last Name"
+msgstr ""
+
+#: class-gf-helpscout.php:715
+msgid "Phone Number"
+msgstr ""
+
+#: class-gf-helpscout.php:722
+msgid "Message Details"
+msgstr ""
+
+#: class-gf-helpscout.php:728
+msgid "Tags"
 msgstr ""
 
 #: class-gf-helpscout.php:736
+msgid "Subject"
+msgstr ""
+
+#: class-gf-helpscout.php:745
+msgid "Message Body"
+msgstr ""
+
+#: class-gf-helpscout.php:751
+msgid "Message Options"
+msgstr ""
+
+#: class-gf-helpscout.php:758
+msgid "Message Status"
+msgstr ""
+
+#: class-gf-helpscout.php:764
+msgid "Message Type"
+msgstr ""
+
+#: class-gf-helpscout.php:771
+msgid "Note"
+msgstr ""
+
+#: class-gf-helpscout.php:776
+msgid "Auto Reply"
+msgstr ""
+
+#: class-gf-helpscout.php:780
+msgid "Send Help Scout auto reply when message is created"
+msgstr ""
+
+#: class-gf-helpscout.php:787
+msgid "Feed Conditional Logic"
+msgstr ""
+
+#: class-gf-helpscout.php:793
+#: class-gf-helpscout.php:798
+msgid "Conditional Logic"
+msgstr ""
+
+#: class-gf-helpscout.php:794
+msgid "Enable"
+msgstr ""
+
+#: class-gf-helpscout.php:795
+msgid "Export to Help Scout if"
+msgstr ""
+
+#: class-gf-helpscout.php:799
+msgid "When conditional logic is enabled, form submissions will only be exported to Help Scout when the condition is met. When disabled, all form submissions will be posted."
+msgstr ""
+
+#: class-gf-helpscout.php:816
+msgid "Attachments"
+msgstr ""
+
+#: class-gf-helpscout.php:843
+msgid "CC"
+msgstr ""
+
+#: class-gf-helpscout.php:869
+msgid "BCC"
+msgstr ""
+
+#: class-gf-helpscout.php:894
+msgid "Choose A Mailbox"
+msgstr ""
+
+#: class-gf-helpscout.php:944
+msgid "Do Not Assign"
+msgstr ""
+
+#: class-gf-helpscout.php:999
+msgid "Active"
+msgstr ""
+
+#: class-gf-helpscout.php:1003
+msgid "Pending"
+msgstr ""
+
+#: class-gf-helpscout.php:1007
+msgid "Closed"
+msgstr ""
+
+#: class-gf-helpscout.php:1011
+msgid "Spam"
+msgstr ""
+
+#: class-gf-helpscout.php:1030
+msgid "Email"
+msgstr ""
+
+#: class-gf-helpscout.php:1034
 msgid "Chat"
 msgstr ""
 
-#: class-gf-helpscout.php:740
+#: class-gf-helpscout.php:1038
 msgid "Phone"
 msgstr ""
 
-#: class-gf-helpscout.php:840
+#: class-gf-helpscout.php:1134
 msgid "Mailbox"
 msgstr ""
 
-#: class-gf-helpscout.php:841
+#: class-gf-helpscout.php:1135
 msgid "User"
 msgstr ""
 
-#: class-gf-helpscout.php:901
+#: class-gf-helpscout.php:1186
 msgid "No User Assigned"
 msgstr ""
 
-#: class-gf-helpscout.php:955
+#: class-gf-helpscout.php:1227
 msgid "Unable to create conversation because API was not initialized."
 msgstr ""
 
-#: class-gf-helpscout.php:979
-msgid ""
-"Unable to create conversation because a valid email address was not "
-"provided."
+#: class-gf-helpscout.php:1256
+msgid "Unable to create conversation because a valid email address was not provided."
 msgstr ""
 
-#: class-gf-helpscout.php:1280
+#: class-gf-helpscout.php:1513
 msgid "Create Help Scout Conversation"
 msgstr ""
 
-#: class-gf-helpscout.php:1354 class-gf-helpscout.php:1464
+#: class-gf-helpscout.php:1584
+#: class-gf-helpscout.php:1690
 msgid "Help Scout Details"
 msgstr ""
 
-#: class-gf-helpscout.php:1422
+#: class-gf-helpscout.php:1652
 msgid "Conversation ID"
 msgstr ""
 
-#: class-gf-helpscout.php:1423
+#: class-gf-helpscout.php:1653
 msgid "Status"
 msgstr ""
 
-#: class-gf-helpscout.php:1424
+#: class-gf-helpscout.php:1654
 msgid "Created At"
 msgstr ""
 
-#: class-gf-helpscout.php:1425
+#: class-gf-helpscout.php:1655
 msgid "Last Updated At"
 msgstr ""
 
-#: class-gf-helpscout.php:1433
+#: class-gf-helpscout.php:1663
 msgid "Create Conversation"
 msgstr ""
 
-#: class-gf-helpscout.php:1532
+#: class-gf-helpscout.php:1754
 msgid "Add Note to Help Scout Conversation"
 msgstr ""
 
-#: class-gf-helpscout.php:1689
+#: class-gf-helpscout.php:1924
 msgid "Help Scout Conversation ID"
-msgstr ""
-
-#. Plugin Name of the plugin/theme
-msgid "Gravity Forms Help Scout Add-On"
-msgstr ""
-
-#. Plugin URI of the plugin/theme
-msgid "https://www.gravityforms.com"
-msgstr ""
-
-#. Description of the plugin/theme
-msgid ""
-"Integrates Gravity Forms with Help Scout, enabling end users to create new "
-"Help Scout conversations."
-msgstr ""
-
-#. Author of the plugin/theme
-msgid "rocketgenius"
-msgstr ""
-
-#. Author URI of the plugin/theme
-msgid "https://www.rocketgenius.com"
 msgstr ""
