@@ -216,6 +216,8 @@ class GFHelpScout extends GFFeedAddOn {
 			)
 		);
 
+		add_filter( 'gform_replace_merge_tags', array( $this, 'replace_merge_tags' ), 10, 7 );
+
 	}
 
 	public function init_ajax() {
@@ -238,7 +240,27 @@ class GFHelpScout extends GFFeedAddOn {
 					),
 				),
 				'strings' => array(
-					'settings_url' => admin_url( 'admin.php?page=gf_settings&subview=' . $this->_slug )
+					'nonce_save'   => wp_create_nonce( 'gform_helpscout_save_app_keys' ),
+					'settings_url' => admin_url( 'admin.php?page=gf_settings&subview=' . $this->_slug ),
+				),
+			),
+			array(
+				'handle'  => 'gform_helpscout_merge_tags',
+				'deps'    => array( 'gform_gravityforms' ),
+				'src'     => $this->get_base_url() . '/js/merge_tags.js',
+				'version' => $this->_version,
+				'enqueue' => array(
+					array(
+						'admin_page' => array( 'form_settings' ),
+						'tab'        => 'notification'
+					),
+				),
+				'strings' => array(
+					'id'      => wp_strip_all_tags( __( 'Conversation ID', 'gravityformshelpscout' ) ),
+					'number'  => wp_strip_all_tags( __( 'Conversation Number', 'gravityformshelpscout' ) ),
+					'status'  => wp_strip_all_tags( __( 'Conversation Status', 'gravityformshelpscout' ) ),
+					'subject' => wp_strip_all_tags( __( 'Conversation Subject', 'gravityformshelpscout' ) ),
+					'url'     => wp_strip_all_tags( __( 'Conversation URL', 'gravityformshelpscout' ) ),
 				),
 			)
 		);
@@ -590,15 +612,25 @@ class GFHelpScout extends GFFeedAddOn {
 
 	public function ajax_save_app_keys() {
 
-		$app_key = rgpost( 'app_key' );
+		// Verify nonce.
+		if ( false === wp_verify_nonce( rgpost( 'nonce' ), 'gform_helpscout_save_app_keys' ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Access denied.', 'gravityformshelpscout' ) ) );
+		}
+
+		// If user is not authorized, exit.
+		if ( ! GFCommon::current_user_can_any( $this->_capabilities_settings_page ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Access denied.', 'gravityformshelpscout' ) ) );
+		}
+
+		$app_key    = rgpost( 'app_key' );
 		$app_secret = rgpost( 'app_secret' );
 
-		if( ! $app_key || ! $app_secret ) {
+		if ( ! $app_key || ! $app_secret ) {
 			wp_send_json_error( array( 'message' => 'The app key or app secret is missing.' ) );
 		}
 
 		$response = $this->api()->validate_app_keys( $app_key, $app_secret );
-		if( is_wp_error( $response ) ) {
+		if ( is_wp_error( $response ) ) {
 			wp_send_json_error( array( 'message' => $response->get_error_message() ) );
 		}
 
@@ -616,7 +648,24 @@ class GFHelpScout extends GFFeedAddOn {
 		delete_option( 'gf_helpscout_api_access_token' );
 	}
 
+	/**
+	 * Defines the supported notification events.
+	 *
+	 * @since 1.8
+	 *
+	 * @param array $form The current form.
+	 *
+	 * @return array
+	 */
+	public function supported_notification_events( $form ) {
 
+		$slug = $this->get_slug();
+
+		return array(
+			"{$slug}_conversation_created" => __( 'Help Scout Conversation Created', 'gravityformshelpscout' ),
+		);
+
+	}
 
 
 
@@ -699,6 +748,7 @@ class GFHelpScout extends GFFeedAddOn {
 					array(
 						'name'          => 'customer_first_name',
 						'type'          => 'field_select',
+						'required'      => true,
 						'label'         => esc_html__( 'First Name', 'gravityformshelpscout' ),
 						'default_value' => $this->get_first_field_by_type( 'name', 3 ),
 					),
@@ -1292,7 +1342,14 @@ class GFHelpScout extends GFFeedAddOn {
 
 		$customer = $this->api()->get_customer_by_email( $data['email'] );
 
-		if ( $customer ) {
+		if ( is_wp_error( $customer ) ) {
+
+			$this->add_feed_error( 'Conversation was not created; unable to determine if customer exists; ' . $customer->get_error_message(), $feed, $entry, $form );
+			$this->maybe_log_error_data( $customer );
+
+			return;
+
+		} elseif ( $customer ) {
 
 			$customer_id = $customer['id'];
 
@@ -1313,6 +1370,15 @@ class GFHelpScout extends GFFeedAddOn {
 
 			$customer_id = $this->api()->create_customer( $data['email'], $data['first_name'], $data['last_name'], $data['phone'] );
 
+			if ( is_wp_error( $customer_id ) ) {
+
+				$this->add_feed_error( 'Conversation was not created; unable to create customer; ' . $customer_id->get_error_message(), $feed, $entry, $form );
+				$this->maybe_log_error_data( $customer_id );
+
+				return;
+
+			}
+
 		}
 
 		$conversation = array(
@@ -1330,6 +1396,7 @@ class GFHelpScout extends GFFeedAddOn {
 					'customer'    => array( 'id' => $customer_id ),
 					'text'        => $data['body'],
 					'cc'          => $data['cc'],
+					'bcc'         => $data['bcc'],
 					'attachments' => $data['attachments'],
 				)
 			),
@@ -1368,6 +1435,7 @@ class GFHelpScout extends GFFeedAddOn {
 
 			// Log that conversation was not created.
 			$this->add_feed_error( 'Conversation was not created; ' . $conversation_id->get_error_message(), $feed, $entry, $form );
+			$this->maybe_log_error_data( $conversation_id );
 
 			return;
 
@@ -1378,6 +1446,8 @@ class GFHelpScout extends GFFeedAddOn {
 
 			// Log that conversation was created.
 			$this->log_debug( __METHOD__ . '(): Conversation has been created.' );
+
+			GFAPI::send_notifications( $form, $entry, $this->get_slug() . '_conversation_created' );
 
 		}
 
@@ -2062,6 +2132,102 @@ class GFHelpScout extends GFFeedAddOn {
 		$array = array_filter( $array );
 
 		return $array;
+	}
+
+	/**
+	 * Writes the supplied error data to the error log.
+	 *
+	 * @since 1.8
+	 *
+	 * @param WP_Error|mixed $error_data A WP_Error object or the error data to be written to the log.
+	 */
+	public function maybe_log_error_data( $error_data ) {
+		if ( is_wp_error( $error_data ) ) {
+			$error_data = $error_data->get_error_data();
+		}
+
+		if ( empty( $error_data ) ) {
+			return;
+		}
+
+		$backtrace = debug_backtrace();
+		$method    = $backtrace[1]['class'] . '::' . $backtrace[1]['function'];
+		$this->log_error( $method . '(): ' . print_r( $error_data, true ) );
+	}
+
+
+	// # MERGE TAGS ----------------------------------------------------------------------------------------------------
+
+
+	/**
+	 * Replace the merge tags.
+	 *
+	 * @since 1.8
+	 *
+	 * @param string $text       The current text in which merge tags are being replaced.
+	 * @param array  $form       The current form object.
+	 * @param array  $entry      The current entry object.
+	 * @param bool   $url_encode Whether or not to encode any URLs found in the replaced value.
+	 * @param bool   $esc_html   Whether or not to encode HTML found in the replaced value.
+	 * @param bool   $nl2br      Whether or not to convert newlines to break tags.
+	 * @param string $format     The format requested for the location the merge is being used. Possible values: html, text or url.
+	 *
+	 * @return string
+	 */
+	public function replace_merge_tags( $text, $form, $entry, $url_encode, $esc_html, $nl2br, $format ) {
+
+		if ( empty( $entry ) || strpos( $text, '{' ) === false ) {
+			return $text;
+		}
+
+		$matches = array();
+
+		preg_match_all( '/{helpscout(:(.*?))?}/', $text, $matches, PREG_SET_ORDER );
+
+		if ( ! empty( $matches ) ) {
+
+			$key             = 'helpscout_conversation_id';
+			$conversation_id = ! empty( $entry[ $key ] ) ? $entry[ $key ] : gform_get_meta( $entry['id'], $key );
+			$conversation    = ! empty( $conversation_id ) ? $this->api()->get_conversation( $conversation_id ) : false;
+
+			foreach ( $matches as $match ) {
+
+				$full_tag    = $match[0];
+				$property    = trim( rgar( $match, 2 ) );
+				$replacement = '';
+
+				if ( empty( $conversation ) || is_wp_error( $conversation ) ) {
+					$text = str_replace( $full_tag, $replacement, $text );
+					continue;
+				}
+
+				switch ( $property ) {
+
+					case 'id':
+					case 'number':
+					case 'status':
+					case 'subject':
+						$replacement = rgar( $conversation, $property );
+						break;
+
+					case 'url':
+						$replacement = rgars( $conversation, '_links/web/href' );
+						break;
+
+				}
+
+				if ( $replacement ) {
+					$replacement = GFCommon::format_variable_value( $replacement, $url_encode, $esc_html, $format, $nl2br );
+				}
+
+				$text = str_replace( $full_tag, $replacement, $text );
+
+			}
+
+		}
+
+		return $text;
+
 	}
 
 }
