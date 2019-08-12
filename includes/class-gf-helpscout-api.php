@@ -380,7 +380,7 @@ class GF_HelpScout_API {
 			case 204:
 				return true;
 			default:
-				return new WP_Error( wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_response_message( $response ) );
+				return new WP_Error( wp_remote_retrieve_response_code( $response ), wp_remote_retrieve_response_message( $response ), wp_remote_retrieve_body( $response ) );
 		}
 
 		// If a return key is defined and array item exists, return it.

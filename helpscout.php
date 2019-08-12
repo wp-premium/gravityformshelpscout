@@ -9,7 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 Plugin Name: Gravity Forms Help Scout Add-On
 Plugin URI: https://www.gravityforms.com
 Description: Integrates Gravity Forms with Help Scout, enabling end users to create new Help Scout conversations.
-Version: 1.7
+Version: 1.8
 Author: rocketgenius
 Author URI: https://www.rocketgenius.com
 License: GPL-2.0+
@@ -17,7 +17,7 @@ Text Domain: gravityformshelpscout
 Domain Path: /languages
 
 ------------------------------------------------------------------------
-Copyright 2009-2016 rocketgenius
+Copyright 2009-2019 rocketgenius
 last updated: October 20, 2010
 
 This program is free software; you can redistribute it and/or modify
@@ -35,7 +35,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  **/
 
-define( 'GF_HELPSCOUT_VERSION', '1.7' );
+define( 'GF_HELPSCOUT_VERSION', '1.8' );
 
 // If Gravity Forms is loaded, bootstrap the Help Scout Add-On.
 add_action( 'gform_loaded', array( 'GF_HelpScout_Bootstrap', 'load' ), 5 );
