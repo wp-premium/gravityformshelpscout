@@ -1,3 +1,13 @@
+### 1.8 | 2019-07-24
+- Added security enhancements.
+- Added the Help Scout Conversation Created notification event.
+- Added the {helpscout:[prop]} merge tag for use in notifications sent after the conversation has been created. Supported properties are id, number, status, subject, and url.
+- Fixed a fatal error which can occur during feed processing if the get or create customer requests experience an issue.
+- Fixed the BCC email addresses not being added to the conversation.
+- Updated error logging statements.
+- Updated the feed settings so mapping the customer first name field is required.
+
+
 ### 1.7 | 2019-06-11
 - Fixed uploaded files not being attached to conversations.
 

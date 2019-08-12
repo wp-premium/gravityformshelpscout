@@ -31,9 +31,10 @@ window.GFHelpScoutAdmin = null;
 			var spinner = new gfAjaxSpinner( self.$authButton, false, 'position:relative;top:6px;left:6px;' );
 
 			$.post( ajaxurl, {
-				action: 'gform_helpscout_save_app_keys',
-				app_key: self.$customAppKey.val(),
-				app_secret: self.$customAppSecret.val()
+				action:     'gform_helpscout_save_app_keys',
+				app_key:    self.$customAppKey.val(),
+				app_secret: self.$customAppSecret.val(),
+				nonce:      gform_helpscout_plugin_settings_strings.nonce_save
 			}, function( response ) {
 				spinner.destroy();
 				if( response.success ) {
