@@ -46,29 +46,34 @@ class GF_HelpScout_API {
 
 	public function __construct() {
 
-		if( defined( 'GRAVITY_API_URL' ) ) {
+		if ( defined( 'GRAVITY_API_URL' ) ) {
 			$this->gravity_api_url = GRAVITY_API_URL;
+		}
+
+		if ( ! empty( $this->get_custom_app_keys() ) ) {
+			gf_helpscout()->log_debug( __METHOD__ . '(): Using custom app.' );
+			$this->is_custom_app = true;
 		}
 
 	}
 
 	public function get_access_token( $prop = false ) {
 
-		if( ! $this->access_token ) {
+		if ( ! $this->access_token ) {
 			$this->access_token = get_option( 'gf_helpscout_api_access_token' );
 		}
 
 		// Make sure access token is not expired. If it is, try to refresh it.
-		if( ! empty( $this->access_token ) && time() >= $this->access_token['expires_at'] && rgar( $this->access_token, 'refresh_token' ) ) {
+		if ( ! empty( $this->access_token ) && time() >= $this->access_token['expires_at'] && rgar( $this->access_token, 'refresh_token' ) ) {
 			$access_token = $this->refresh( $this->access_token['refresh_token'] );
-			if( $access_token ) {
+			if ( $access_token ) {
 				$this->access_token = $this->save_access_token( $access_token );
 			} else {
 				$this->access_token = false;
 			}
 		}
 
-		if( $prop && ! empty( $this->access_token ) ) {
+		if ( $prop && ! empty( $this->access_token ) ) {
 			return rgar( $this->access_token, $prop, false );
 		}
 
@@ -80,16 +85,18 @@ class GF_HelpScout_API {
 		$current_refresh_token = $this->get_access_token( 'refresh_token' );
 
 		// Do not re-save the same access token; we will lose our custom expires_at property.
-		if( $current_refresh_token === rgar( $access_token, 'refresh_token' ) ) {
+		if ( $current_refresh_token === rgar( $access_token, 'refresh_token' ) ) {
 			return false;
 		}
 
 		// Set a new property with a timestamp so we now exactly when the refresh token is expired.
 		$access_token['expires_at'] = time() + ( $access_token['expires_in'] - MINUTE_IN_SECONDS );
 
-		if( update_option( 'gf_helpscout_api_access_token', $access_token ) ) {
+		if ( update_option( 'gf_helpscout_api_access_token', $access_token ) ) {
 			return $access_token;
 		}
+
+		gf_helpscout()->log_error( __METHOD__ . '(): The access token could not be saved.' );
 
 		return false;
 	}
@@ -98,15 +105,34 @@ class GF_HelpScout_API {
 		return delete_option( 'gf_helpscout_api_access_token' );
 	}
 
+	/**
+	 * Refreshes the access token.
+	 *
+	 * @since 1.6
+	 * @since 1.12 Updated to support custom apps.
+	 *
+	 * @param string $refresh_token The refresh token
+	 *
+	 * @return mixed
+	 */
 	public function refresh( $refresh_token ) {
 
-		$response = wp_remote_post( $this->get_gravity_api_url( '/auth/helpscout/refresh' ), array(
-			'body' => array(
-				'refresh_token' => $refresh_token,
-			)
-		) );
+		$body = array( 'refresh_token' => $refresh_token );
 
-		if( ! $response || wp_remote_retrieve_response_code( $response ) != 200 ) {
+		if ( $this->is_custom_app ) {
+			$endpoint              = $this->api_url . '/oauth2/token';
+			$body['client_id']     = $this->get_custom_app_keys( 'app_key' );
+			$body['client_secret'] = $this->get_custom_app_keys( 'app_secret' );
+			$body['grant_type']    = 'refresh_token';
+		} else {
+			$endpoint = $this->get_gravity_api_url( '/auth/helpscout/refresh' );
+		}
+
+		$response = wp_remote_post( $endpoint, array( 'body' => $body ) );
+
+		if ( ! $response || wp_remote_retrieve_response_code( $response ) != 200 ) {
+			gf_helpscout()->log_error( __METHOD__ . '(): Response: ' . json_encode( $response ) );
+
 			return false;
 		}
 
@@ -123,7 +149,9 @@ class GF_HelpScout_API {
 			)
 		) );
 
-		if( ! $response || wp_remote_retrieve_response_code( $response ) != 200 ) {
+		if ( ! $response || wp_remote_retrieve_response_code( $response ) != 200 ) {
+			gf_helpscout()->log_error( __METHOD__ . '(): Response: ' . json_encode( $response ) );
+
 			return false;
 		}
 
@@ -131,7 +159,7 @@ class GF_HelpScout_API {
 
 		// Standardize the properties; this endpoint returns them camel case instead of underscored (i.e. expiresIn vs expires_in).
 		$access_token = array(
-			'access_token'    => $raw_access_token['accessToken'],
+			'access_token'  => $raw_access_token['accessToken'],
 			'expires_in'    => $raw_access_token['expiresIn'],
 			'refresh_token' => $raw_access_token['refreshToken'],
 		);
@@ -142,12 +170,12 @@ class GF_HelpScout_API {
 
 	public function get_custom_app_keys( $key = '' ) {
 
-		if( empty( $this->custom_app_keys ) ) {
-			$app_keys = get_option( 'gf_helpscout_api_custom_app_keys' );
+		if ( empty( $this->custom_app_keys ) ) {
+			$app_keys              = get_option( 'gf_helpscout_api_custom_app_keys' );
 			$this->custom_app_keys = $app_keys;
 		}
 
-		if( $key && ! empty( $this->custom_app_keys ) ) {
+		if ( $key && ! empty( $this->custom_app_keys ) ) {
 			return $this->custom_app_keys[ $key ];
 		}
 
@@ -157,7 +185,7 @@ class GF_HelpScout_API {
 	public function save_app_keys( $app_key, $app_secret ) {
 
 		$result = update_option( 'gf_helpscout_api_custom_app_keys', array(
-			'app_key' => $app_key,
+			'app_key'    => $app_key,
 			'app_secret' => $app_secret,
 		) );
 
@@ -171,8 +199,8 @@ class GF_HelpScout_API {
 	public function validate_app_keys( $app_key, $app_secret ) {
 
 		$response = $this->make_request( '/oauth2/token', array(
-			'grant_type' => 'client_credentials',
-			'client_id'  => $app_key,
+			'grant_type'    => 'client_credentials',
+			'client_id'     => $app_key,
 			'client_secret' => $app_secret,
 		), 'POST' );
 
@@ -196,7 +224,7 @@ class GF_HelpScout_API {
 			'grant_type'    => 'authorization_code',
 		), 'POST' );
 
-		if( is_wp_error( $response ) ) {
+		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
 
@@ -210,9 +238,10 @@ class GF_HelpScout_API {
 
 	public function get_mailboxes( $page_number = 1 ) {
 		$response = $this->make_request( "/mailboxes/?page_number={$page_number}" );
-		if( is_wp_error( $response ) ) {
+		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
+
 		return rgars( $response, '_embedded/mailboxes' );
 	}
 
@@ -238,9 +267,10 @@ class GF_HelpScout_API {
 
 	public function get_customer_by_email( $email ) {
 		$response = $this->make_request( '/customers', array( 'query' => sprintf( '(email:"%s")', $email ) ) );
-		if( is_wp_error( $response ) ) {
+		if ( is_wp_error( $response ) ) {
 			return $response;
 		}
+
 		return rgars( $response, '_embedded/customers/0', false );
 	}
 
@@ -251,13 +281,13 @@ class GF_HelpScout_API {
 			'lastName'  => $last_name,
 			'emails'    => array(
 				array(
-					'type' => 'other',
+					'type'  => 'other',
 					'value' => $email,
 				),
 			),
 		);
 
-		if( $phone ) {
+		if ( $phone ) {
 			$options['phones'] = array(
 				array(
 					'type'  => 'other',
@@ -293,7 +323,7 @@ class GF_HelpScout_API {
 	 * Add a phone number to a customer.
 	 *
 	 * @param int    $customer_id Help Scout Customer ID.
-	 * @param string $email       Phone number.
+	 * @param string $phone       Phone number.
 	 * @param string $type        Location for this phone. Possible values include: fax, home, mobile, other, pager, work.
 	 *
 	 * @return int|WP_Error
@@ -310,7 +340,7 @@ class GF_HelpScout_API {
 
 	public function add_note( $conversation_id, $note ) {
 
-		if( is_string( $note ) ) {
+		if ( is_string( $note ) ) {
 			$note = array(
 				'text' => $note,
 			);
@@ -362,12 +392,12 @@ class GF_HelpScout_API {
 
 		// Execute API request.
 		$response = wp_remote_request( $request_url, $request_args );
-		if( is_wp_error( $response ) ) {
+		if ( is_wp_error( $response ) ) {
 
 			return $response;
 		}
 
-		switch( wp_remote_retrieve_response_code( $response ) ) {
+		switch ( wp_remote_retrieve_response_code( $response ) ) {
 			case 200:
 				// Convert JSON response to array.
 				$response = json_decode( $response['body'], true );
@@ -375,6 +405,7 @@ class GF_HelpScout_API {
 			// Created resource.
 			case 201:
 				$resource_id = wp_remote_retrieve_header( $response, 'resource-id' );
+
 				return $resource_id ? $resource_id : true;
 			// Updated resource.
 			case 204:

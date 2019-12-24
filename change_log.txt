@@ -1,7 +1,30 @@
+### 1.12 | 2019-11-06
+- Updated authentication logging statements.
+- Updated Javascript files, stylesheets to use minified versions.
+- Fixed auth token refresh failing when the add-on is using a custom app.
+
+
+### 1.11 | 2019-10-03
+- Fixed conversation creation failing when the last name is not provided for a new customer.
+
+
+### 1.10 | 2019-10-02
+- Fixed conversation creation failing when a file attachment exceeds the maximum size allowed by the Help Scout API (10 MB).
+- Fixed conversation creation failing when the authenticated user does not have permission to access the mailbox where the customer already exists.
+- Fixed conversation creation failing when merge tags used in the tags setting are for fields without values.
+- Fixed conversation creation failing when the assigned user has been deleted from the Help Scout account.
+
+
+### 1.9 | 2019-08-07
+- Added security enhancements.
+- Updated the minimum required Gravity Forms version to 2.1.
+- Fixed conversations with attachments not being created on servers where allow_url_fopen is disabled.
+
+
 ### 1.8 | 2019-07-24
 - Added security enhancements.
 - Added the Help Scout Conversation Created notification event.
-- Added the {helpscout:[prop]} merge tag for use in notifications sent after the conversation has been created. Supported properties are id, number, status, subject, and url.
+- Added the *{helpscout:[prop]}(https://docs.gravityforms.com/helpscoutprop-merge-tag/)* merge tag for use in notifications sent after the conversation has been created. Supported properties are id, number, status, subject, and url.
 - Fixed a fatal error which can occur during feed processing if the get or create customer requests experience an issue.
 - Fixed the BCC email addresses not being added to the conversation.
 - Updated error logging statements.
@@ -71,7 +94,7 @@
 - Fixed tags not being appropriately added to conversations.
 - Fixed PHP warning when no file attachments were provided.
 - Fixed Add-On not loading if Help Scout API class was already defined.
-  
+
 
 ### 1.0 | 2015-05-27
 - It's all new!
