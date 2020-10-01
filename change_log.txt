@@ -1,3 +1,45 @@
+### 1.15 | 2020-09-28
+- Updated support for Gravity Forms 2.5.
+- Fixed a PHP notice which occurs when after authenticating Help Scout account.
+
+
+### 1.14 | 2020-07-14
+- Added security enhancements.
+- Updated the get conversation requests for the entries list and detail pages to cache the conversations for one hour to reduce the number of requests to the Help Scout API.
+- Updated the Assignee setting so the choices are arranged into Teams and Users optgroups.
+- Fixed a performance issue with the link in the Conversation ID column of the entries list page which caused a 500 error on some hosting environments.
+- Fixed the Destination Mailbox setting only listing the first 50 mailboxes.
+
+
+### 1.13 | 2020-05-18
+- Added license key to GF authorization URL.
+- Added support for Gravity Forms 2.5.
+- Added the "Click here to refresh access token" button to the add-on settings page so the request can be attempted again when it times out.
+- Added translations for Hebrew, Hindi, Japanese, and Turkish.
+- Updated Gravity API domain.
+- Updated logging statements to clarify that the add-on is still connected to Help Scout when the token refresh times out.
+- Fixed an issue where HTML encoded characters could appear in conversation tags when displayed in Help Scout.
+- Fixed an issue where some existing customer details could be lost when the first and/or last name are updated.
+
+
+### 1.12.4
+- Fixed an issue where HTML encoded characters could appear in conversation tags when displayed in Help Scout.
+
+
+### 1.12.3
+- Updated Gravity API domain.
+
+
+### 1.12.2
+- Added license key to GF authorization URL.
+- Fixed an issue where some existing customer details could be lost when the first and/or last name are updated.
+
+
+### 1.12.1
+- Added the "Click here to refresh access token" button to the add-on settings page so the request can be attempted again when it times out.
+- Updated logging statements to clarify that the add-on is still connected to Help Scout when the token refresh times out.
+
+
 ### 1.12 | 2019-11-06
 - Updated authentication logging statements.
 - Updated Javascript files, stylesheets to use minified versions.

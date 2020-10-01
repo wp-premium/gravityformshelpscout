@@ -42,7 +42,7 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @access protected
 	 * @var    string $_min_gravityforms_version The minimum version required.
 	 */
-	protected $_min_gravityforms_version = '2.1';
+	protected $_min_gravityforms_version = '2.4.6';
 
 	/**
 	 * Defines the plugin slug.
@@ -162,6 +162,15 @@ class GFHelpScout extends GFFeedAddOn {
 	protected $api = null;
 
 	/**
+	 * Indicates if the add-on is authenticated with the Help Scout API.
+	 *
+	 * @since 1.13
+	 *
+	 * @var null|bool
+	 */
+	protected $_is_authenticated = null;
+
+	/**
 	 * Get instance of this class.
 	 *
 	 * @since  1.0
@@ -200,6 +209,7 @@ class GFHelpScout extends GFFeedAddOn {
 		}
 
 		add_action( 'admin_init', array( $this, 'maybe_create_conversation' ) );
+		add_action( 'admin_init', array( $this, 'maybe_conversation_redirect' ) );
 
 		add_filter( 'gform_addnote_button', array( $this, 'add_note_checkbox' ) );
 
@@ -218,6 +228,7 @@ class GFHelpScout extends GFFeedAddOn {
 
 		add_filter( 'gform_replace_merge_tags', array( $this, 'replace_merge_tags' ), 10, 7 );
 
+		add_filter( 'gform_settings_header_buttons', array( $this, 'filter_gform_settings_header_buttons' ), 99 );
 	}
 
 	public function init_ajax() {
@@ -297,50 +308,79 @@ class GFHelpScout extends GFFeedAddOn {
 
 	public function plugin_settings_page() {
 
+		if ( ! rgempty( 'gform_helpscout_retry_refresh' ) && ! $this->is_authenticated() && $this->api()->is_access_token_expired() ) {
+			GFCommon::add_error_message( esc_html__( 'Unable to refresh access token with Help Scout.', 'gravityformshelpscout' ) );
+		}
 		// If deauth button is clicked, deauth plugin.
-		if( rgpost( '_gaddon_setting_deauth' ) ) {
+		elseif( rgpost( '_gaddon_setting_deauth' ) ) {
 
 			$this->api()->delete_access_token();
+			GFCache::delete( $this->get_slug() . '_mailboxes_choices' );
 
 		}
 		// If access token is provided, save it.
-		else if ( rgget( 'access_token' ) ) {
+		elseif ( rgpost( 'access_token' ) && ! rgpost( '_gaddon_setting_deauth' ) ) {
 
-			$this->api()->save_access_token( json_decode( base64_decode( rgget( 'access_token' ) ), true ) );
+			// Verify state.
+			if ( ! wp_verify_nonce( rgpost( 'state') , $this->get_authentication_state_action() ) ) {
+				GFCommon::add_error_message( esc_html__( 'Unable to authenticate with Help Scout due to mismatched state.', 'gravityformshelpscout' ) );
+			} else {
+				$this->api()->save_access_token( $_POST );
+			}
 
 		}
 		// If error is provided, display message.
-		else if ( rgget( 'auth_error' ) ) {
+		elseif ( rgpost( 'auth_error' ) ) {
 
 			// Add error message.
 			GFCommon::add_error_message( esc_html__( 'Unable to authenticate with Help Scout.', 'gravityformshelpscout' ) );
 
-		} else if( rgpost( 'gform_helpscout_enable_custom_app' ) ) {
+		} elseif( rgpost( 'gform_helpscout_enable_custom_app' ) ) {
 
 			$settings = $this->get_plugin_settings();
 			$settings['customAppEnable'] = 1;
 			$this->update_plugin_settings( $settings );
 
-		} else if( rgpost( 'gform_helpscout_disable_custom_app' ) ) {
+		} elseif( rgpost( 'gform_helpscout_disable_custom_app' ) ) {
 
 			$settings = $this->get_plugin_settings();
 			$settings['customAppEnable'] = 0;
 			$this->update_plugin_settings( $settings );
 			$this->api()->delete_app_keys();
 
-		} else if( rgget( 'code' ) ) {
+		} elseif( rgget( 'code' ) && wp_verify_nonce( rgget( 'state' ), $this->get_authentication_state_action() ) ) {
 
 			$this->api()->do_custom_app_auth( rgget( 'code' ) );
 
 		}
 		// Migrate v1 API key to v2 access token.
-		else if( $this->get_plugin_setting( 'api_key' ) ) {
+		elseif( $this->get_plugin_setting( 'api_key' ) ) {
 
 			$this->transition();
 
 		}
 
 		parent::plugin_settings_page();
+
+	}
+
+	/**
+	 * Hide submit button on plugin settings page.
+	 *
+	 * @since 1.13
+	 *
+	 * @param string $html
+	 *
+	 * @return string
+	 */
+	public function filter_gform_settings_header_buttons( $html = '' ) {
+
+		// If this is not the plugin settings page, return.
+		if ( ! $this->is_plugin_settings( $this->get_slug() ) ) {
+			return $html;
+		}
+
+		return '';
 
 	}
 
@@ -460,19 +500,31 @@ class GFHelpScout extends GFFeedAddOn {
 
 		$custom_app_enabled = '1' == rgar( $settings, 'customAppEnable' );
 
+		// Get button class.
+		$button_class = version_compare( GFForms::$version, '2.5-dev-1', '<' ) ? 'button-secondary' : 'button secondary';
+
 		// If HelpScout is authenticated, display de-authorize button.
 		if ( $this->is_authenticated() ) {
 
 			$message = $custom_app_enabled ? __( 'Custom app authenticated with Help Scout.', 'gravityformshelpscout' ) : __( 'Authenticated with Help Scout.', 'gravityformshelpscout' );
 			$html .= sprintf( '<p><i class="fa fa-check gf_valid"></i> %s</p>', esc_html( $message ) );
 			$html .= sprintf(
-				' <button class="button-secondary" name="_gaddon_setting_deauth" value="1">%1$s</a>',
-				esc_html__( 'Disconnect Help Scout', 'gravityformshelpscout' )
+				' <button class="%2$s" name="_gaddon_setting_deauth" value="1">%1$s</a>',
+				esc_html__( 'Disconnect Help Scout', 'gravityformshelpscout' ),
+				$button_class
 			);
 
 		} else {
 
-			if ( $custom_app_enabled ) {
+			if ( rgempty( 'gform_helpscout_retry_refresh' ) && $this->api()->is_access_token_expired() ) {
+
+				$html .= sprintf(
+					' <button class="%2$s" name="gform_helpscout_retry_refresh" value="1">%1$s</a>',
+					esc_html__( 'Click here to refresh access token.', 'gravityformshelpscout' ),
+					$button_class
+				);
+
+			} elseif ( $custom_app_enabled ) {
 
 				// If SSL is available, display custom app settings.
 				if ( is_ssl() ) {
@@ -498,8 +550,16 @@ class GFHelpScout extends GFFeedAddOn {
 			} else {
 
 				// Prepare authorization URL.
+				$license_key  = GFCommon::get_key();
 				$settings_url = urlencode( $this->get_redirect_url() );
-				$auth_url     = add_query_arg( array( 'redirect_to' => $settings_url ), $this->api()->get_gravity_api_url( '/auth/helpscout' ) );
+				$auth_url     = add_query_arg(
+					array(
+						'redirect_to' => $settings_url,
+						'license'     => $license_key,
+						'state'       => wp_create_nonce( $this->get_authentication_state_action() ),
+					),
+					$this->api()->get_gravity_api_url( '/auth/helpscout' )
+				);
 
 				$html .= sprintf(
 					'<a href="%2$s" class="button" id="gform_helpscout_auth_button">%1$s</a>',
@@ -568,6 +628,7 @@ class GFHelpScout extends GFFeedAddOn {
 				'type'              => 'api_key',
 				'label'             => esc_html__( 'App Key', 'gravityformshelpscout' ),
 				'class'             => 'medium',
+				'callback'          => array( $this, 'settings_api_key' ),
 				'feedback_callback' => array( $this, 'is_valid_app_key_secret' ),
 				'value'             => $this->api()->get_custom_app_keys( 'app_key' ),
 			)
@@ -576,11 +637,12 @@ class GFHelpScout extends GFFeedAddOn {
 		// Display custom app secret.
 		$this->single_setting_row(
 			array(
-				'name'  => 'customAppSecret',
-				'type'  => 'api_key',
-				'label' => esc_html__( 'App Secret', 'gravityformshelpscout' ),
-				'class' => 'medium',
-				'value' => $this->api()->get_custom_app_keys( 'app_secret' ),
+				'name'     => 'customAppSecret',
+				'type'     => 'api_key',
+				'label'    => esc_html__( 'App Secret', 'gravityformshelpscout' ),
+				'class'    => 'medium',
+				'callback' => array( $this, 'settings_api_key' ),
+				'value'    => $this->api()->get_custom_app_keys( 'app_secret' ),
 			)
 		);
 
@@ -742,11 +804,11 @@ class GFHelpScout extends GFFeedAddOn {
 						'type'          => 'select',
 						'dependency'    => 'mailbox',
 						'choices'       => $this->users_for_feed_settings(),
-						'label'         => esc_html__( 'Assign To User', 'gravityformshelpscout' ),
+						'label'         => esc_html__( 'Assignee', 'gravityformshelpscout' ),
 						'tooltip'       => sprintf(
 							'<h6>%s</h6>%s',
-							esc_html__( 'Assign To User', 'gravityformshelpscout' ),
-							esc_html__( 'Choose the Help Scout User this form entry will be assigned to.', 'gravityformshelpscout' )
+							esc_html__( 'Assignee', 'gravityformshelpscout' ),
+							esc_html__( 'Choose the Help Scout Team or User this form entry will be assigned to.', 'gravityformshelpscout' )
 						),
 					),
 				),
@@ -956,6 +1018,13 @@ class GFHelpScout extends GFFeedAddOn {
 	 */
 	public function mailboxes_for_feed_setting() {
 
+		$cache_key = $this->get_slug() . '_mailboxes_choices';
+		$choices   = GFCache::get( $cache_key );
+
+		if ( ! empty( $choices ) && is_array( $choices ) ) {
+			return $choices;
+		}
+
 		// Initialize choices array.
 		$choices = array(
 			array(
@@ -970,9 +1039,10 @@ class GFHelpScout extends GFFeedAddOn {
 
 		// Get the Help Scout mailboxes.
 		$mailboxes = $this->api()->get_mailboxes();
-		if( is_wp_error( $mailboxes ) ) {
+		if ( is_wp_error( $mailboxes ) ) {
 			// Log that mailboxes could not be retrieved.
 			$this->log_error( __METHOD__ . '(): Failed to get mailboxes; ' . $mailboxes->get_error_message() );
+
 			return $choices;
 		}
 
@@ -992,15 +1062,17 @@ class GFHelpScout extends GFFeedAddOn {
 
 		}
 
+		GFCache::set( $cache_key, $choices, true, HOUR_IN_SECONDS );
+
 		return $choices;
 
 	}
 
 	/**
-	 * Prepare Help Scout Users for feed settings field.
+	 * Prepares the choices (teams and users) for the Assignee setting.
 	 *
 	 * @since  1.0
-	 * @access public
+	 * @since  1.14 Updated to arrange the teams and users into optgroups.
 	 *
 	 * @return array
 	 */
@@ -1014,16 +1086,23 @@ class GFHelpScout extends GFFeedAddOn {
 			),
 		);
 
-		// If Help Scout instance is not initialized, return choices.
-		if ( ! $this->is_authenticated() ) {
-			return $choices;
-		}
-
 		// Get current mailbox value.
 		$mailbox_id = $this->get_setting( 'mailbox' );
 
 		// If no mailbox is set, return choices.
 		if ( rgblank( $mailbox_id ) ) {
+			return $choices;
+		}
+
+		$cache_key = $this->get_slug() . '_users_choices_' . $mailbox_id;
+		$cached_choices = GFCache::get( $cache_key );
+
+		if ( ! empty( $cached_choices ) && is_array( $cached_choices ) ) {
+			return $cached_choices;
+		}
+
+		// If Help Scout instance is not initialized, return choices.
+		if ( ! $this->is_authenticated() ) {
 			return $choices;
 		}
 
@@ -1037,16 +1116,39 @@ class GFHelpScout extends GFFeedAddOn {
 			return $choices;
 		}
 
+		$teams_choices = array();
+		$users_group   = array(
+			'label'   => __( 'Users', 'gravityformshelpscout' ),
+			'choices' => array(),
+		);
+
 		// Loop through users.
 		foreach ( $users as $user ) {
 
-			// Add user as choice.
-			$choices[] = array(
-				'label' => $user['firstName'] . ' ' . $user['lastName'],
-				'value' => $user['id'],
-			);
+			if ( rgar( $user, 'type' ) === 'team' ) {
+				$teams_choices[] = array(
+					'label' => $user['firstName'],
+					'value' => $user['id'],
+				);
+			} else {
+				$users_group['choices'][] = array(
+					'label' => $user['firstName'] . ' ' . $user['lastName'],
+					'value' => $user['id'],
+				);
+			}
 
 		}
+
+		if ( ! empty( $teams_choices ) ) {
+			$choices[] = array(
+				'label'   => __( 'Teams', 'gravityformshelpscout' ),
+				'choices' => $teams_choices,
+			);
+		}
+
+		$choices[] = $users_group;
+
+		GFCache::set( $cache_key, $choices, true, HOUR_IN_SECONDS );
 
 		return $choices;
 
@@ -1191,7 +1293,7 @@ class GFHelpScout extends GFFeedAddOn {
 	 * Configures which columns should be displayed on the feed list page.
 	 *
 	 * @since  1.0
-	 * @access public
+	 * @since  1.14 Changed label for the user column to Assignee.
 	 *
 	 * @return array
 	 */
@@ -1200,8 +1302,21 @@ class GFHelpScout extends GFFeedAddOn {
 		return array(
 			'feed_name' => esc_html__( 'Name', 'gravityformshelpscout' ),
 			'mailbox'   => esc_html__( 'Mailbox', 'gravityformshelpscout' ),
-			'user'      => esc_html__( 'User', 'gravityformshelpscout' ),
+			'user'      => esc_html__( 'Assignee', 'gravityformshelpscout' ),
 		);
+
+	}
+
+	/**
+	 * Return the plugin's icon for the plugin/form settings menu.
+	 *
+	 * @since 1.13
+	 *
+	 * @return string
+	 */
+	public function get_menu_icon() {
+
+		return file_get_contents( $this->get_base_path() . '/images/menu-icon.svg' );
 
 	}
 
@@ -1238,10 +1353,10 @@ class GFHelpScout extends GFFeedAddOn {
 	}
 
 	/**
-	 * Returns the value to be displayed in the user name column.
+	 * Returns the value to be displayed in the Assignee column.
 	 *
 	 * @since  1.0
-	 * @access public
+	 * @since  1.14 Updated to identify when the selected assignee is a team.
 	 *
 	 * @param array $feed The current Feed object.
 	 *
@@ -1251,7 +1366,7 @@ class GFHelpScout extends GFFeedAddOn {
 
 		// If no user ID is set, return not assigned.
 		if ( rgblank( $feed['meta']['user'] ) ) {
-			return esc_html__( 'No User Assigned', 'gravityformshelpscout' );
+			return esc_html__( 'Not Assigned', 'gravityformshelpscout' );
 		}
 
 		// If Help Scout instance is not initialized, return user ID.
@@ -1263,6 +1378,11 @@ class GFHelpScout extends GFFeedAddOn {
 		$user = $this->get_assigned_user( $feed );
 		if ( is_null( $user ) ) {
 			return rgars( $feed, 'meta/user' );
+		}
+
+		if ( rgar( $user, 'type' ) === 'team' ) {
+			/* translators: %s: The Help Scout team name. */
+			return sprintf( esc_html__( '%s (Team)', 'gravityformshelpscout' ), $user['firstName'] );
 		}
 
 		return esc_html( $user['firstName'] . ' ' . $user['lastName'] );
@@ -1308,9 +1428,9 @@ class GFHelpScout extends GFFeedAddOn {
 			'phone'       => $this->get_field_value( $form, $entry, $feed['meta']['customer_phone'] ),
 			'subject'     => GFCommon::replace_variables( $feed['meta']['subject'], $form, $entry, false, false, false, 'text' ),
 			'body'        => GFCommon::replace_variables( $feed['meta']['body'], $form, $entry ),
-			'tags'        => $this->parse_comma_delimited_string( GFCommon::replace_variables( $feed['meta']['tags'], $form, $entry ) ),
-			'cc'          => $this->parse_comma_delimited_string( GFCommon::replace_variables( rgars( $feed, 'meta/cc' ), $form, $entry ) ),
-			'bcc'         => $this->parse_comma_delimited_string( GFCommon::replace_variables( rgars( $feed, 'meta/bcc' ), $form, $entry ) ),
+			'tags'        => $this->parse_comma_delimited_string( GFCommon::replace_variables( $feed['meta']['tags'], $form, $entry, false, false, false, 'text' ) ),
+			'cc'          => $this->parse_comma_delimited_string( GFCommon::replace_variables( rgars( $feed, 'meta/cc' ), $form, $entry, false, false, false, 'text' ) ),
+			'bcc'         => $this->parse_comma_delimited_string( GFCommon::replace_variables( rgars( $feed, 'meta/bcc' ), $form, $entry, false, false, false, 'text' ) ),
 			'attachments' => $this->process_attachments( rgars( $feed, 'meta/attachments' ), $form, $entry, $feed ),
 			'auto_reply'  => rgars( $feed, 'meta/auto_reply' ) == '1',
 			'note'        => GFCommon::replace_variables( rgars( $feed, 'meta/note' ), $form, $entry ),
@@ -1365,14 +1485,22 @@ class GFHelpScout extends GFFeedAddOn {
 
 		} elseif ( $customer ) {
 
-			$customer_id = $customer['id'];
+			$customer_id     = $customer['id'];
+			$requires_update = false;
 
-			// Update customer first and last name (if provided).
-			if( ( $data['first_name'] && $customer['firstName'] !== $data['first_name'] ) || ( $data['last_name'] && $customer['lastName'] !== $data['last_name'] ) ) {
-				$this->api()->update_customer( $customer['id'], array(
-					'firstName' => $data['first_name'],
-					'lastName'  => $data['last_name'],
-				) );
+			if ( ! empty( $data['first_name'] ) && $customer['firstName'] !== $data['first_name'] ) {
+				$requires_update       = true;
+				$customer['firstName'] = $data['first_name'];
+			}
+
+			if ( ! empty( $data['last_name'] ) && $customer['lastName'] !== $data['last_name'] ) {
+				$requires_update      = true;
+				$customer['lastName'] = $data['last_name'];
+			}
+
+			// Update customer if first or last name are provided and differ from the existing customer record.
+			if ( $requires_update ) {
+				$this->api()->update_customer( $customer['id'], $customer );
 			}
 
 			// Add customer phone. Don't both checking if the phone already exists. HelpScout will handle that for us.
@@ -1749,18 +1877,9 @@ class GFHelpScout extends GFFeedAddOn {
 		if ( $conversation_id ) {
 
 			// Get conversation.
-			$conversation = $this->api()->get_conversation( $conversation_id );
+			$conversation = $this->get_conversation( $conversation_id, $entry['id'] );
 
-			if( is_wp_error( $conversation ) ) {
-
-				// Log that conversation could not be retrieved.
-				$this->log_error( __METHOD__ . '(): Could not get Help Scout conversation; ' . $conversation->get_error_message() );
-
-				if( $conversation->get_error_code() == 404 ) {
-					// Delete conversation ID from entry.
-					gform_delete_meta( $entry['id'], 'helpscout_conversation_id' );
-				}
-
+			if ( empty( $conversation ) ) {
 				return $html;
 			}
 
@@ -1773,6 +1892,7 @@ class GFHelpScout extends GFFeedAddOn {
 
 			// Get create conversation URL.
 			$url = add_query_arg( array( 'gf_helpscout' => 'process', 'lid' => $entry['id'] ) );
+			$url = wp_nonce_url( $url, 'gform_helpscout_create_conversation' );
 
 			// Display create conversation button.
 			$html .= '<a href="' . esc_url( $url ) . '" class="button">' . esc_html__( 'Create Conversation', 'gravityformshelpscout' ) . '</a>';
@@ -1830,6 +1950,16 @@ class GFHelpScout extends GFFeedAddOn {
 			return;
 		}
 
+		// Verify nonce.
+		if ( wp_verify_nonce( rgget( '_wpnonce' ), 'gform_helpscout_create_conversation' ) === false ) {
+			wp_die( esc_html__( 'Access denied.', 'gravityformshelpscout' ) );
+		}
+
+		// If user is not authorized, exit.
+		if ( ! GFCommon::current_user_can_any( $this->_capabilities_settings_page ) ) {
+			wp_die( esc_html__( 'Access denied.', 'gravityformshelpscout' ) );
+		}
+
 		// Get the current form and entry.
 		$form  = GFAPI::get_form( rgget( 'id' ) );
 		$entry = $this->get_current_entry();
@@ -1841,6 +1971,36 @@ class GFHelpScout extends GFFeedAddOn {
 
 		// Process feeds.
 		$this->maybe_process_feed( $entry, $form );
+
+	}
+
+	/**
+	 * Redirects to the conversation on the Help Scout site when the link in the conversation ID column of the entries list page is used.
+	 *
+	 * @since 1.14
+	 */
+	public function maybe_conversation_redirect() {
+
+		if ( empty( $_GET['gf_helpscout_redirect'] ) || empty( $_GET['lid'] ) || ! $this->is_entry_view() || ! $this->current_user_can_any( 'gravityforms_view_entries' ) ) {
+			return;
+		}
+
+		$entry_id = absint( $_GET['lid'] );
+		if ( ! GFAPI::entry_exists( $entry_id ) ) {
+			return;
+		}
+
+		$conversation_id = gform_get_meta( $entry_id, 'helpscout_conversation_id' );
+
+		if ( $conversation_id && wp_verify_nonce( $_GET['gf_helpscout_redirect'], $conversation_id ) ) {
+			$conversation_url = rgars( $this->get_conversation( $conversation_id, $entry_id ), '_links/web/href' );
+
+			if ( $conversation_url && strpos( $conversation_url, 'https://secure.helpscout.net/' ) === 0 && wp_redirect( $conversation_url ) ) {
+				exit;
+			}
+		}
+
+		GFCommon::add_dismissible_message( esc_html__( 'Unable to redirect to Help Scout conversation.', 'gravityformshelpscout' ), 'gf_helpscout_redirect', 'error' );
 
 	}
 
@@ -1949,6 +2109,9 @@ class GFHelpScout extends GFFeedAddOn {
 	 * @return bool
 	 */
 	public function is_authenticated() {
+		if ( ! is_null( $this->_is_authenticated ) ) {
+			return $this->_is_authenticated;
+		}
 
 		$access_token = $this->api()->get_access_token();
 		if ( rgblank( $access_token ) ) {
@@ -1956,7 +2119,14 @@ class GFHelpScout extends GFFeedAddOn {
 			if ( $this->get_plugin_setting( 'api_key' ) ) {
 				$this->transition();
 			} else {
-				$this->log_error( __METHOD__ . '(): No v1 API key to transition and no v2 API oAuth access token.' );
+				if ( $this->api()->is_access_token_expired() ) {
+					$this->log_error( __METHOD__ . '(): The access token refresh request failed. The add-on is still connected to Help Scout and will retry the refresh during the next request.' );
+				} else {
+					$this->log_error( __METHOD__ . '(): No v1 API key to transition and no v2 API oAuth access token.' );
+				}
+
+				$this->_is_authenticated = false;
+
 				return false;
 			}
 		}
@@ -1966,11 +2136,14 @@ class GFHelpScout extends GFFeedAddOn {
 		$response = $this->api()->get_me();
 		if ( is_wp_error( $response ) ) {
 			$this->log_error( __METHOD__ . '(): API credentials are invalid; ' . $response->get_error_message() );
+			$this->_is_authenticated = false;
 
 			return false;
 		}
 
 		$this->log_debug( __METHOD__ . '(): API credentials are valid.' );
+
+		$this->_is_authenticated = true;
 
 		return true;
 	}
@@ -2031,6 +2204,19 @@ class GFHelpScout extends GFFeedAddOn {
 
 	public function get_redirect_url() {
 		return admin_url( 'admin.php?page=gf_settings&subview=' . $this->_slug );
+	}
+
+	/**
+	 * Get action name for authentication state.
+	 *
+	 * @since 1.14
+	 *
+	 * @return string
+	 */
+	public function get_authentication_state_action() {
+
+		return 'gform_helpscout_authentication_state';
+
 	}
 
 	/**
@@ -2118,28 +2304,19 @@ class GFHelpScout extends GFFeedAddOn {
 	public function add_entry_conversation_column_link( $value, $form_id, $field_id, $entry, $query_string ) {
 
 		// If this is not the Help Scout Conversation ID column, return value.
-		if ( 'helpscout_conversation_id' !== $field_id ) {
+		if ( 'helpscout_conversation_id' !== $field_id || empty( $value ) ) {
 			return $value;
 		}
 
-		// Get conversation ID.
-		$conversation_id = $this->get_entry_conversation_id( $entry );
+		$url = add_query_arg( array(
+			'page'                  => 'gf_entries',
+			'view'                  => 'entry',
+			'id'                    => $form_id,
+			'lid'                   => absint( $entry['id'] ),
+			'gf_helpscout_redirect' => wp_create_nonce( $value ),
+		), admin_url( 'admin.php' ) );
 
-		// If API is not initialized or entry does not have a Help Scout conversation ID, return value.
-		if ( ! $this->is_authenticated() || ! $conversation_id ) {
-			return $value;
-		}
-
-		// Get the conversation.
-		$conversation = $this->api()->get_conversation( $conversation_id );
-		if( is_wp_error( $conversation ) ) {
-			// Log that conversation could not be retrieved.
-			$this->log_error( __METHOD__ . '(): Could not get Help Scout conversation; ' . $conversation->get_error_message() );
-
-			return $value;
-		}
-
-		return sprintf( '<a href="%s" target="_blank">%s</a>', $conversation['_links']['web']['href'], $conversation['id'] );
+		return sprintf( '<a href="%s" target="_blank">%s</a>', esc_url( $url ), $value );
 
 	}
 
@@ -2267,7 +2444,7 @@ class GFHelpScout extends GFFeedAddOn {
 	 */
 	public function replace_merge_tags( $text, $form, $entry, $url_encode, $esc_html, $nl2br, $format ) {
 
-		if ( empty( $entry ) || strpos( $text, '{' ) === false ) {
+		if ( empty( $entry['id'] ) || strpos( $text, '{' ) === false ) {
 			return $text;
 		}
 
@@ -2279,7 +2456,7 @@ class GFHelpScout extends GFFeedAddOn {
 
 			$key             = 'helpscout_conversation_id';
 			$conversation_id = ! empty( $entry[ $key ] ) ? $entry[ $key ] : gform_get_meta( $entry['id'], $key );
-			$conversation    = ! empty( $conversation_id ) ? $this->api()->get_conversation( $conversation_id ) : false;
+			$conversation    = $this->get_conversation( $conversation_id, $entry['id'] );
 
 			foreach ( $matches as $match ) {
 
@@ -2287,7 +2464,7 @@ class GFHelpScout extends GFFeedAddOn {
 				$property    = trim( rgar( $match, 2 ) );
 				$replacement = '';
 
-				if ( empty( $conversation ) || is_wp_error( $conversation ) ) {
+				if ( empty( $conversation ) ) {
 					$text = str_replace( $full_tag, $replacement, $text );
 					continue;
 				}
@@ -2319,6 +2496,54 @@ class GFHelpScout extends GFFeedAddOn {
 
 		return $text;
 
+	}
+
+	/**
+	 * Gets the specified conversation and caches it for an hour.
+	 *
+	 * @since 1.14
+	 *
+	 * @param int|string $id       The ID of the conversation to be retrieved.
+	 * @param int        $entry_id The ID of the entry the conversation was created by.
+	 *
+	 * @return bool|array
+	 */
+	public function get_conversation( $id, $entry_id ) {
+		if ( empty( $id ) ) {
+			return false;
+		}
+
+		$cache_key    = $this->get_slug() . '_conversation_' . $id;
+		$conversation = GFCache::get( $cache_key );
+
+		if ( ! empty( $conversation ) ) {
+			$this->log_debug( sprintf( '%s(): Returning cached conversation #%s for entry #%d.', __METHOD__, $id, $entry_id ) );
+
+			return $conversation;
+		}
+
+		if ( ! $this->is_authenticated() ) {
+			$this->log_error( sprintf( '%s(): Could not get conversation #%s for entry #%d.', __METHOD__, $id, $entry_id ) );
+
+			return false;
+		}
+
+		$conversation = $this->api()->get_conversation( $id );
+
+		if ( is_wp_error( $conversation ) ) {
+			$this->log_error( sprintf( '%s(): Could not get conversation #%s for entry #%d. %s', __METHOD__, $id, $entry_id, $conversation->get_error_message() ) );
+
+			if ( $conversation->get_error_code() == 404 ) {
+				gform_delete_meta( $entry_id, 'helpscout_conversation_id' );
+			}
+
+			return false;
+		}
+
+		$this->log_debug( sprintf( '%s(): Caching conversation #%s for 1 hour for entry #%d.', __METHOD__, $id, $entry_id ) );
+		GFCache::set( $cache_key, $conversation, true, HOUR_IN_SECONDS );
+
+		return $conversation;
 	}
 
 }
