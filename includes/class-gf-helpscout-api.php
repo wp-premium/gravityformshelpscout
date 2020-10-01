@@ -38,7 +38,7 @@ class GF_HelpScout_API {
 	 *
 	 * @var string
 	 */
-	protected $gravity_api_url = 'https://www.gravityhelp.com/wp-json/gravityapi/v1';
+	protected $gravity_api_url = 'https://gravityapi.com/wp-json/gravityapi/v1';
 
 	protected $auth_url = 'https://secure.helpscout.net/authentication/authorizeClientApplication';
 
@@ -57,14 +57,47 @@ class GF_HelpScout_API {
 
 	}
 
+	/**
+	 * Determines if the access token is expired.
+	 *
+	 * @since 1.13
+	 *
+	 * @param array $access_token The access token properties.
+	 *
+	 * @return bool
+	 */
+	public function is_access_token_expired( $access_token = array() ) {
+		if ( empty( $access_token ) ) {
+			$access_token = $this->get_saved_access_token();
+		}
+
+		return (
+			is_array( $access_token )
+			&& ! empty( $access_token['refresh_token'] )
+			&& ! empty( $access_token['expires_at'] )
+			&& time() >= $access_token['expires_at']
+		);
+	}
+
+	/**
+	 * Retrieves the access token from the database.
+	 *
+	 * @since 1.13
+	 *
+	 * @return mixed
+	 */
+	public function get_saved_access_token() {
+		return get_option( 'gf_helpscout_api_access_token' );
+	}
+
 	public function get_access_token( $prop = false ) {
 
 		if ( ! $this->access_token ) {
-			$this->access_token = get_option( 'gf_helpscout_api_access_token' );
+			$this->access_token = $this->get_saved_access_token();
 		}
 
 		// Make sure access token is not expired. If it is, try to refresh it.
-		if ( ! empty( $this->access_token ) && time() >= $this->access_token['expires_at'] && rgar( $this->access_token, 'refresh_token' ) ) {
+		if ( ! empty( $this->access_token ) && $this->is_access_token_expired( $this->access_token ) ) {
 			$access_token = $this->refresh( $this->access_token['refresh_token'] );
 			if ( $access_token ) {
 				$this->access_token = $this->save_access_token( $access_token );
@@ -126,6 +159,7 @@ class GF_HelpScout_API {
 			$body['grant_type']    = 'refresh_token';
 		} else {
 			$endpoint = $this->get_gravity_api_url( '/auth/helpscout/refresh' );
+			$endpoint = add_query_arg( 'state', wp_create_nonce( gf_helpscout()->get_authentication_state_action() ), $endpoint );
 		}
 
 		$response = wp_remote_post( $endpoint, array( 'body' => $body ) );
@@ -136,9 +170,16 @@ class GF_HelpScout_API {
 			return false;
 		}
 
-		$access_token = json_decode( wp_remote_retrieve_body( $response ), true );
+		// Get the response body.
+		$response_body = json_decode( wp_remote_retrieve_body( $response ), true );
 
-		return $access_token;
+		// If state does not match, return false.
+		if ( ! $this->is_custom_app && ! wp_verify_nonce( $response_body['state'], gf_helpscout()->get_authentication_state_action() ) ) {
+			gf_helpscout()->log_error( __METHOD__ .'(): State did not match.' );
+			return false;
+		}
+
+		return $response_body;
 	}
 
 	public function transition( $v1_api_key ) {
@@ -212,7 +253,12 @@ class GF_HelpScout_API {
 	}
 
 	public function get_auth_url() {
-		return add_query_arg( 'client_id', $this->get_custom_app_keys( 'app_key' ), $this->auth_url );
+		$args = array(
+			'client_id' => $this->get_custom_app_keys( 'app_key' ),
+			'state'     => wp_create_nonce( gf_helpscout()->get_authentication_state_action() ),
+		);
+
+		return add_query_arg( $args, $this->auth_url );
 	}
 
 	public function do_custom_app_auth( $code ) {
@@ -236,13 +282,59 @@ class GF_HelpScout_API {
 		return $this->make_request( '/users/me' );
 	}
 
-	public function get_mailboxes( $page_number = 1 ) {
-		$response = $this->make_request( "/mailboxes/?page_number={$page_number}" );
-		if ( is_wp_error( $response ) ) {
+	/**
+	 * Returns the mailboxes for the connected Help Scout account.
+	 *
+	 * @since unknown
+	 *
+	 * @param null|int $page_number          The page number or null to retrieve all pages.
+	 * @param bool     $return_page_response Indicates if the full response for the page specific request should be immediately returned.
+	 *
+	 * @return array|WP_Error
+	 */
+	public function get_mailboxes( $page_number = null, $return_page_response = false ) {
+
+		$options = array();
+
+		if ( ! is_null( $page_number ) ) {
+			$options['page'] = $page_number;
+		}
+
+		$response = $this->make_request( '/mailboxes', $options );
+		if ( $return_page_response || is_wp_error( $response ) ) {
 			return $response;
 		}
 
-		return rgars( $response, '_embedded/mailboxes' );
+		$page        = 1;
+		$total_pages = absint( rgars( $response, 'page/totalPages' ) );
+		$mailboxes   = rgars( $response, '_embedded/mailboxes', array() );
+
+		if ( empty( $mailboxes ) || ! is_null( $page_number ) || $total_pages <= 1 ) {
+			return $mailboxes;
+		}
+
+		while ( $page < $total_pages ) {
+			$response = $this->get_mailboxes( ++$page, true );
+
+			if ( is_wp_error( $response ) ) {
+				gf_helpscout()->log_error( sprintf( '%s(): unable to get page %d; %s', __METHOD__, $page, $response->get_error_message() ) );
+
+				return $mailboxes;
+			}
+
+			$page_mailboxes = rgars( $response, '_embedded/mailboxes' );
+			if ( empty( $page_mailboxes ) || ! is_array( $page_mailboxes ) ) {
+				gf_helpscout()->log_error( sprintf( '%s(): page %d is invalid.', __METHOD__, $page ) );
+
+				return $mailboxes;
+			}
+
+			$mailboxes = array_merge( $mailboxes, $page_mailboxes );
+		}
+
+		gf_helpscout()->log_debug( sprintf( '%s(): retrieved %d pages.', __METHOD__, $total_pages ) );
+
+		return $mailboxes;
 	}
 
 	public function get_mailbox( $mailbox_id ) {
@@ -299,21 +391,33 @@ class GF_HelpScout_API {
 		return $this->make_request( '/customers', $options, 'POST' );
 	}
 
-	public function update_customer( $customer_id, $data ) {
+	/**
+	 * Updates an existing customer.
+	 *
+	 * @since 1.6
+	 *
+	 * @param int   $customer_id The ID of the customer to be updated.
+	 * @param array $customer    The customer fields.
+	 *
+	 * @return array|bool|string|WP_Error
+	 * @throws Exception
+	 */
+	public function update_customer( $customer_id, $customer ) {
 
-		$options = array_intersect_key( $data, array_flip( array(
+		// Ensure only supported fields are included in the request.
+		// https://developer.helpscout.com/mailbox-api/endpoints/customers/update/#request-fields.
+		$options = array_intersect_key( $customer, array_flip( array(
 			'firstName',
 			'lastName',
+			'phone',
 			'photoUrl',
-			'photoType',
 			'jobTitle',
-			'location',
+			'photoType',
 			'background',
-			'createdAt',
-			'updatedAt',
-			'age',
-			'gender',
+			'location',
 			'organization',
+			'gender',
+			'age',
 		) ) );
 
 		return $this->make_request( "/customers/{$customer_id}", $options, 'PUT' );
